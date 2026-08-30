@@ -1,6 +1,8 @@
 package dev.morphhid.app
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -149,7 +152,10 @@ private fun HomeScreen(
     ) { }
     LaunchedEffect(Unit) {
         val wanted = buildList {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(Manifest.permission.BLUETOOTH_CONNECT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_SCAN)
+        }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.filter {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
@@ -374,9 +380,12 @@ private fun PairingScreen(
     val sessionState by controller.session.state.collectAsState()
     var hosts by remember { mutableStateOf<List<android.bluetooth.BluetoothDevice>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
+    var discoverable by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         hosts = controller.transport.bondedHosts()
+        discoverable = controller.transport.isDiscoverable()
     }
 
     LazyColumn(
@@ -384,24 +393,121 @@ private fun PairingScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // --- Status row ---
         item {
             Card(shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(14.dp)) {
-                    Text("How to connect", fontSize = 15.sp)
+                    val phase = sessionState.connection.phase
                     Text(
-                        "Option A — Windows / macOS / Linux:\n" +
-                            "1. Activate a profile in MorphHID first.\n" +
-                            "2. On the computer, open Bluetooth settings and add a new device.\n" +
-                            "3. The computer discovers this phone, connects to it, and it appears as an HID device (keyboard/mouse). MorphHID accepts the connection automatically.\n\n" +
-                            "Option B — Android host:\n" +
-                            "Pair from Android Bluetooth settings first, then tap the host below to connect.\n\n" +
-                            "If connect fails after switching profiles: hosts cache the old device layout. " +
-                            "Remove this phone from the host's Bluetooth devices and pair again.",
+                        when (phase) {
+                            dev.morphhid.core.control.TransportPhase.CONNECTED -> "Connected to ${sessionState.connection.hostName ?: "host"}"
+                            dev.morphhid.core.control.TransportPhase.REGISTERED -> "HID profile registered, waiting for host"
+                            dev.morphhid.core.control.TransportPhase.REGISTERING -> "Registering HID profile..."
+                            else -> "No HID profile active"
+                        },
+                        fontSize = 15.sp,
+                        color = if (phase == dev.morphhid.core.control.TransportPhase.CONNECTED)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (discoverable) "Phone is discoverable (hosts can find it)"
+                        else "Phone is NOT discoverable — tap 'Make Discoverable' below",
+                        fontSize = 12.sp,
+                        color = if (discoverable) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
+        // --- Discoverable button ---
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = !discoverable,
+                    onClick = {
+                        // Try silent reflection first.
+                        val ok = controller.transport.setDiscoverable(300)
+                        if (!ok) {
+                            // Fallback: system intent (shows a dialog).
+                            try {
+                                val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                message = "Cannot start discoverable: ${e.message}"
+                            }
+                        }
+                        discoverable = controller.transport.isDiscoverable()
+                    },
+                ) { Text("Make Discoverable") }
+                OutlinedButton(onClick = {
+                    hosts = controller.transport.bondedHosts()
+                    discoverable = controller.transport.isDiscoverable()
+                }) { Text("Refresh") }
+            }
+        }
+
+        // --- Instructions ---
+        item {
+            Card(shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Windows / macOS / Linux connection", fontSize = 15.sp)
+                    Text(
+                        "1. Activate a profile in MorphHID (Home screen → Activate).\n" +
+                            "   Wait for status to say 'HID profile registered'.\n\n" +
+                            "2. Tap 'Make Discoverable' above (or below if already done).\n\n" +
+                            "3. If this phone was previously paired with the computer:\n" +
+                            "   a. On the computer: remove this phone from Bluetooth devices.\n" +
+                            "   b. On this phone: tap 'Unpair' next to the computer below.\n" +
+                            "   (Old cached pairing data prevents Windows from seeing the HID service.)\n\n" +
+                            "4. On the computer: open Bluetooth → Add device.\n" +
+                            "   The computer discovers this phone and connects automatically.\n" +
+                            "   MorphHID shows 'Connected' — check Device Manager for HID entries.\n\n" +
+                            "Note: Windows may show the phone as 'PC' or a generic icon — this is " +
+                            "cosmetic (Bluetooth Class-of-Device is OS-controlled). The real test " +
+                            "is whether Device Manager gains HID Keyboard/Mouse entries.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
+            }
+        }
+        item {
+            Card(shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Android host connection", fontSize = 15.sp)
+                    Text(
+                        "1. Pair the two devices from Android Bluetooth settings first.\n" +
+                            "2. The host appears below — tap 'Connect' next to it.\n" +
+                            "3. The phone initiates the HID connection to the host.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        }
+
+        // --- Bonded hosts ---
+        item {
+            Text(
+                "Paired devices",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (hosts.isEmpty()) {
+            item {
+                Text(
+                    "No paired devices. Pair from Android Bluetooth settings first.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         items(hosts, key = { it.address }) { device ->
@@ -418,20 +524,40 @@ private fun PairingScreen(
                         Text(name ?: device.address, fontSize = 15.sp)
                         Text(device.address, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Button(enabled = !busy, onClick = {
-                        busy = true
-                        controller.connectHost(device.address) { ok ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(enabled = !busy, onClick = {
+                            busy = true
+                            controller.connectHost(device.address) { ok ->
+                                busy = false
+                                if (ok) onBack()
+                            }
+                        }) { Text("Connect") }
+                        TextButton(enabled = !busy, onClick = {
+                            busy = true
+                            val ok = controller.transport.unpairHost(device.address)
                             busy = false
-                            if (ok) onBack()
-                        }
-                    }) { Text("Connect") }
+                            if (ok) {
+                                hosts = controller.transport.bondedHosts()
+                                message = "Unpaired ${name ?: device.address}"
+                            } else {
+                                message = "Unpair failed"
+                            }
+                        }) { Text("Unpair") }
+                    }
                 }
             }
         }
-        item {
-            OutlinedButton(onClick = {
-                hosts = controller.transport.bondedHosts()
-            }) { Text("Refresh") }
+
+        message?.let { msg ->
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
+                    Text(msg, modifier = Modifier.padding(12.dp), fontSize = 13.sp)
+                }
+            }
         }
     }
 }

@@ -2,6 +2,54 @@
 
 Living document so nothing gets lost between sessions. Ordered by topic.
 
+## Status (2026-08-31, session 5 - Windows discoverability fix
+
+Done:
+- Added BluetoothHidTransport.setDiscoverable(duration) - silent reflection
+  on BluetoothAdapter.setScanMode(SCAN_MODE_CONNECTABLE_DISCOVERABLE, dur).
+- Added isDiscoverable() / cancelDiscoverable() to the transport.
+- Added BLUETOOTH_SCAN permission to the manifest and runtime permission list.
+- AppController.activateProfile() now auto-triggers setDiscoverable(300)
+  after successful profile registration - the phone becomes discoverable
+  so Windows/macOS can find it during Add Device.
+- PairingScreen rewritten:
+  - Status card shows registration + discoverability state.
+  - "Make Discoverable" button (silent reflection with fallback to system
+    ACTION_REQUEST_DISCOVERABLE intent).
+  - "Unpair" button per bonded host (removeBond via reflection).
+  - Clear step-by-step Windows wizard instructions emphasising the
+    clean re-pair cycle (unpair both sides, activate, discoverable,
+    Add device on Windows).
+- Build green: 34 JVM tests pass, APK ~23MB.
+
+Root cause analysis for Windows failure:
+- Windows discovers the phone but shows it as "PC" / generic icon - this
+  is cosmetic (Bluetooth CoD is OS-controlled, apps cannot change it).
+- The REAL problem was the phone was NOT discoverable when the user
+  triggered "Add device" on Windows. registerApp() puts the HID SDP record
+  in the phone's SDP database, but the phone must be in
+  SCAN_MODE_CONNECTABLE_DISCOVERABLE for the host to discover it and
+  enumerate its services. Without discoverability, Windows either:
+  (a) doesn't find the phone at all, or
+  (b) finds it from a cached bond but skips SDP re-enumeration -> never
+      sees the HID service.
+- Secondary cause: cached pairing data. If the phone was bonded with
+  Windows before HID was registered, Windows cached the service list
+  without HID. The unpair UI lets users clear this on the phone side.
+
+### setScanMode reflection
+- BluetoothAdapter.setScanMode(int, int) is hidden API (not in public
+  SDK). Accessed via reflection. Returns true on success.
+- Duration is in seconds, max 300 (5 minutes). Android auto-reverts to
+  connectable-only after the duration expires.
+- Fallback: ACTION_REQUEST_DISCOVERABLE intent shows a system dialog
+  and is the supported public API. Used when reflection fails.
+- Some OEM ROMs block setScanMode silently. If the reflection call
+  returns true but the phone still isn't discoverable, fall back to the
+  intent.
+- The BLUETOOTH_SCAN permission (API 31+) is declared with
+  neverForLocation since we don't derive location from scan results.
+
 ## Status (2026-08-30, end of session 1)
 
 Done:

@@ -76,6 +76,10 @@ class AppController(private val context: Context) {
             if (result is dev.morphhid.core.control.OpResult.Ok) {
                 _activeProfile.value = stored.profile
                 HidForegroundService.start(context)
+                // Make the phone discoverable so hosts (esp. Windows) can find
+                // it and see the registered HID SDP record during "Add device".
+                // Silent reflection first; UI can also trigger the intent.
+                transport.setDiscoverable(300)
             }
         }
     }
@@ -91,6 +95,12 @@ class AppController(private val context: Context) {
     fun connectHost(address: String, onResult: (Boolean) -> Unit) {
         scope.launch { onResult(session.connectHost(address) is dev.morphhid.core.control.OpResult.Ok) }
     }
+
+    fun unpairHost(address: String): Boolean = transport.unpairHost(address)
+
+    fun makeDiscoverable(durationSeconds: Int = 300): Boolean = transport.setDiscoverable(durationSeconds)
+
+    fun isDiscoverable(): Boolean = transport.isDiscoverable()
 
     private fun vibrate(ms: Long) {
         try {

@@ -343,6 +343,111 @@ class BluetoothHidTransport(
         }
     }
 
+    /**
+     * Removes the bond on the PHONE side. Necessary when a host has cached
+     * an old SDP/HID record for this phone: the pairing must be removed on
+     * BOTH sides before a fresh "Add device" on Windows/macOS re-runs
+     * service discovery and picks up the registered HID app.
+     *
+     * Uses the hidden BluetoothDevice.removeBond() API via reflection —
+     * widely used by BT utility apps; wrapped in try/catch for OEM quirks.
+     */
+    fun unpairHost(address: String): Boolean {
+        if (!hasConnectPermission()) return false
+        val a = adapter
+            ?: (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
+        val device = try {
+            a.getRemoteDevice(address)
+        } catch (e: IllegalArgumentException) {
+            return false
+        }
+        return try {
+            val method = device.javaClass.getMethod("removeBond")
+            (method.invoke(device) as? Boolean) ?: false
+        } catch (e: Exception) {
+            Log.w(TAG, "removeBond failed for $address", e)
+            false
+        }
+    }
+
+    /**
+     * Returns true if the phone is currently in Bluetooth discoverable
+     * (scan) mode — i.e. other devices can find it during their "Add device"
+     * flow. This is essential for Windows/macOS hosts that initiate the
+     * connection TO the phone.
+     */
+    fun isDiscoverable(): Boolean {
+        if (!hasConnectPermission()) return false
+        val a = adapter
+            ?: (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
+        return try {
+            a.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE
+        } catch (e: SecurityException) {
+            false
+        }
+    }
+
+    /**
+     * Silently makes the phone Bluetooth-discoverable for [durationSeconds]
+     * (max 300 on most devices) using the hidden setScanMode API.
+     *
+     * This is the KEY step for Windows/macOS: the host must discover the
+     * phone (which has the HID SDP record registered) during "Add device".
+     * Without discoverability, Windows either doesn't find the phone at
+     * all, or finds it from a cached bond but without the HID service.
+     *
+     * Returns true on success; if reflection fails the caller should
+     * fall back to the system [ACTION_REQUEST_DISCOVERABLE] intent.
+     */
+    fun setDiscoverable(durationSeconds: Int = 120): Boolean {
+        if (!hasConnectPermission()) return false
+        val a = adapter
+            ?: (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
+        return try {
+            val dur = durationSeconds.coerceIn(1, 300)
+            val method = BluetoothAdapter::class.java.getMethod(
+                "setScanMode",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+            )
+            val result = method.invoke(a, BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE, dur)
+            // setScanMode returns true on success
+            val ok = (result as? Boolean) ?: false
+            if (ok) {
+                Log.i(TAG, "setScanMode(DISCOVERABLE, ${dur}s) succeeded")
+            } else {
+                Log.w(TAG, "setScanMode returned false")
+            }
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "setScanMode reflection failed — use intent fallback", e)
+            false
+        }
+    }
+
+    /**
+     * Cancels discoverability (reverts to connectable-only mode).
+     */
+    fun cancelDiscoverable(): Boolean {
+        if (!hasConnectPermission()) return false
+        val a = adapter
+            ?: (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
+        return try {
+            val method = BluetoothAdapter::class.java.getMethod(
+                "setScanMode",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+            )
+            method.invoke(a, BluetoothAdapter.SCAN_MODE_CONNECTABLE, 0) as? Boolean ?: false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     // ---------------------------------------------------------------- private
 
     /** Unregisters the app and waits for onAppStatusChanged(false). */
