@@ -189,6 +189,20 @@ class HidDescriptorCompilerTest {
     }
 
     @Test
+    fun `modifier aliases resolve to the same usages`() {
+        val compiled = HidDescriptorCompiler().compile(keyboardProfile())
+        assertEquals(0xE1, compiled.findControl("keyboard.shift")!!.usage)
+        assertEquals(0xE0, compiled.findControl("keyboard.ctrl")!!.usage)
+        assertEquals(0xE2, compiled.findControl("keyboard.alt")!!.usage)
+        assertEquals(0xE3, compiled.findControl("keyboard.win")!!.usage)
+        // Aliases and their long forms hit the same usage, so they share state.
+        assertEquals(
+            compiled.findControl("keyboard.shift")!!.usage,
+            compiled.findControl("keyboard.leftShift")!!.usage,
+        )
+    }
+
+    @Test
     fun `fingerprint is stable and changes with descriptor`() {
         val c1 = HidDescriptorCompiler().compile(keyboardProfile())
         val c2 = HidDescriptorCompiler().compile(keyboardProfile())

@@ -28,6 +28,7 @@ class ControlSessionTest {
         override val outputReports = MutableSharedFlow<OutputReport>()
         val sent = mutableListOf<Pair<Int, ByteArray>>()
         var registeredCount = 0
+        var disconnectCount = 0
 
         override suspend fun register(compiled: CompiledHid): Boolean {
             registeredCount++
@@ -35,7 +36,7 @@ class ControlSessionTest {
         }
 
         override suspend fun connect(hostAddress: String): Boolean = true
-        override suspend fun disconnect() {}
+        override suspend fun disconnect() { disconnectCount++ }
         override suspend fun unregister() {}
         override suspend fun sendReport(reportId: Int, payload: ByteArray): Boolean {
             sent += reportId to payload.copyOf()
@@ -159,6 +160,24 @@ class ControlSessionTest {
         session.activate(profile(), HidDescriptorCompiler().compile(profile()))
         val result = session.runMacro(Actor.Human(), "nope")
         assertTrue(result is OpResult.Error)
+    }
+
+    @Test
+    fun `reactivating the same profile keeps the connection`() = runTest {
+        val transport = FakeTransport()
+        val session = ControlSession(transport, scope = backgroundScope)
+        val profile = profile()
+        val compiled = HidDescriptorCompiler().compile(profile)
+
+        session.activate(profile, compiled)
+        assertEquals(1, transport.registeredCount)
+        session.connectHost("AA:BB:CC:DD:EE:FF")
+        assertEquals(0, transport.disconnectCount)
+
+        // Same fingerprint: no disconnect, no second registration.
+        session.activate(profile, compiled)
+        assertEquals(1, transport.registeredCount)
+        assertEquals(0, transport.disconnectCount)
     }
 
     @Test

@@ -82,17 +82,34 @@ class ControlSession(
     // ------------------------------------------------------------- lifecycle
 
     suspend fun activate(profile: Profile, compiled: CompiledHid): OpResult = mutex.withLock {
-        if (this.compiled != null) {
+        // Re-activating the same profile (same fingerprint) must not disturb
+        // an existing connection.
+        if (this.compiled?.fingerprint == compiled.fingerprint) {
             cancelMacrosLocked()
-            runCatching { transport.disconnect() }
-            runCatching { transport.unregister() }
+            this.profile = profile
+            this.compiled = compiled
+            this.codec = ReportCodec(compiled)
+            this.policy = AccessPolicy(profile)
+            record(HumanActor, "activate", profile.device.name, "ok", "unchanged fingerprint")
+            return@withLock OpResult.Ok
         }
+
+        // Remember the host we were using so we can try to reconnect after
+        // the descriptor swap (the host may reject it if it cached the old
+        // device — in that case the user re-pairs from the host side).
+        val lastHost = transport.state.value.hostAddress
+        cancelMacrosLocked()
+        if (this.compiled != null && transport.state.value.phase == TransportPhase.CONNECTED) {
+            runCatching { transport.disconnect() }
+        }
+
         this.profile = profile
         this.compiled = compiled
         this.codec = ReportCodec(compiled)
         this.policy = AccessPolicy(profile)
         this.macroQueues.clear()
 
+        // register() swaps the HID app: unregister -> settle -> register.
         val ok = runCatching { transport.register(compiled) }.getOrDefault(false)
         if (!ok) {
             this.profile = null
@@ -108,6 +125,15 @@ class ControlSession(
             it.copy(activeProfileName = profile.device.name, ledStates = emptyMap(), lastError = null)
         }
         record(HumanActor, "activate", profile.device.name, "ok", "descriptor=${compiled.descriptor.size}B fp=${compiled.fingerprint.take(12)}")
+
+        // Best effort: reconnect to the host we were using before the swap.
+        if (lastHost != null) {
+            val host = lastHost
+            scope.launch {
+                delay(SETTLE_BEFORE_RECONNECT_MS)
+                connectHost(host)
+            }
+        }
         OpResult.Ok
     }
 
@@ -451,5 +477,6 @@ class ControlSession(
     companion object {
         private val HumanActor = Actor.Human()
         private const val MAX_FLATTENED_STEPS = 10_000
+        private const val SETTLE_BEFORE_RECONNECT_MS = 800L
     }
 }

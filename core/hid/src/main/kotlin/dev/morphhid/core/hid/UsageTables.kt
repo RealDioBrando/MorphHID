@@ -103,6 +103,12 @@ object KeyboardUsage {
         put("rightShift", 0xE5)
         put("rightAlt", 0xE6)
         put("rightGui", 0xE7)
+        // Friendly aliases (map to the left-hand modifier).
+        put("shift", 0xE1)
+        put("ctrl", 0xE0)
+        put("alt", 0xE2)
+        put("gui", 0xE3)
+        put("win", 0xE3)
     }
 
     val MODIFIER_USAGES: Set<Int> = (0xE0..0xE7).toSet()

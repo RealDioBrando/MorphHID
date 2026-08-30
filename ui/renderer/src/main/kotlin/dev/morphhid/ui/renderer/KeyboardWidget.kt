@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import dev.morphhid.core.profile.KeyRow
 import dev.morphhid.core.profile.WidgetSpec
 
-private val MODIFIER_KEYS = setOf("shift", "leftShift", "rightShift", "leftCtrl", "rightCtrl", "leftAlt", "rightAlt", "leftGui", "rightGui", "winKey", "cmdKey")
+private val MODIFIER_KEYS = setOf("shift", "leftShift", "rightShift", "ctrl", "leftCtrl", "rightCtrl", "alt", "leftAlt", "rightAlt", "gui", "leftGui", "rightGui", "win", "winKey", "cmdKey")
 
 private fun display(name: String): String = when (name) {
     "space" -> "SPACE"
@@ -42,7 +42,7 @@ private fun display(name: String): String = when (name) {
     "leftShift", "rightShift", "shift" -> "SHIFT"
     "leftCtrl", "rightCtrl" -> "CTRL"
     "leftAlt", "rightAlt" -> "ALT"
-    "leftGui", "rightGui", "winKey", "cmdKey" -> "OS"
+    "leftGui", "rightGui", "gui", "win", "winKey", "cmdKey" -> "OS"
     "up" -> "▲"
     "down" -> "▼"
     "left" -> "◀"

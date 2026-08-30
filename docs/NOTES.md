@@ -24,6 +24,12 @@ Done:
 - JVM tests: descriptor golden, codec, macro timing, control session,
   validator.
 
+Session 2 (on-device bug fixes): back navigation exited the app -> added
+BackHandler; 'keyboard.shift' was unknown -> added shift/ctrl/alt/gui/win
+aliases mapping to the left-hand modifiers; connect failed after profile
+switch -> transport lifecycle rework (proxy kept alive, settle phases,
+target-matched callbacks, same-fingerprint no-op, auto-reconnect).
+
 Build verified: :core:hid:test :core:control:test all green (34 tests), :app:assembleDebug produces pp/build/outputs/apk/debug/app-debug.apk (~23 MB).
 
 Not done yet (next up):
@@ -37,6 +43,21 @@ Not done yet (next up):
 ## Critical knowledge / gotchas
 
 ### BluetoothHidDevice
+- **Profile-swap lifecycle (learned from on-device testing, Android 12 & 16):
+  closing the profile proxy and re-requesting it during a profile switch is
+  RACY — the service re-bind can silently fail, after which neither
+  registerApp nor connect work. The transport now obtains the proxy ONCE and
+  keeps it for the app's lifetime. Swapping = disconnect -> unregisterApp
+  (wait for callback) -> settle 500ms -> registerApp -> wait for callback.**
+- Stale onConnectionStateChanged(DISCONNECTED) events from a previous host
+  can fail a pending connect — callbacks are now matched against the
+  connect/disconnect target address.
+- Re-activating the same profile (same fingerprint) is a no-op that keeps
+  the connection alive. Activating a different profile auto-reconnects to
+  the last host after ~800ms (best effort).
+- If a host rejects the phone after a descriptor change (cached layout),
+  the user must remove the phone from the host's Bluetooth devices and
+  re-pair. The pairing screen now says this explicitly.
 - Public since API 28. Constants: SUBCLASS1_KEYBOARD=0x40,
   SUBCLASS2_MOUSE=0x80, SUBCLASS3_COMBO=0xC0. We encode these directly.
 - `registerApp(sdp, inQos, outQos, executor, callback)` is async; success

@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,6 +85,11 @@ private fun App(controller: AppController) {
     LaunchedEffect(activeProfile) {
         if (activeProfile != null && screen != Screen.Runtime) screen = Screen.Runtime
         if (activeProfile == null && screen == Screen.Runtime) screen = Screen.Home
+    }
+
+    // System back gesture/button returns to Home instead of exiting.
+    BackHandler(enabled = screen != Screen.Home) {
+        screen = Screen.Home
     }
 
     Scaffold(
@@ -385,7 +391,9 @@ private fun PairingScreen(
                     Text(
                         "1. Pair this phone with the host computer from Android Bluetooth settings first.\n" +
                             "2. The host then appears below; tap it to connect as HID.\n" +
-                            "3. If the host already knows this phone, just tap it.",
+                            "3. If the host already knows this phone, just tap it.\n\n" +
+                            "If connect fails after switching profiles: hosts cache the old device layout. " +
+                            "Remove this phone from the host's Bluetooth devices and pair again.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),

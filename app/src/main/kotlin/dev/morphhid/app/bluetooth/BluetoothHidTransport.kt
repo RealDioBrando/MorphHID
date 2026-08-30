@@ -18,6 +18,7 @@ import dev.morphhid.core.control.TransportPhase
 import dev.morphhid.core.control.TransportState
 import dev.morphhid.core.hid.CompiledHid
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,14 +29,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * [HidTransport] backed by the platform's public HID-device profile API
- * (android.bluetooth.BluetoothHidDevice, available since API 28).
+ * [HidTransport] backed by the platform HID-device profile
+ * (android.bluetooth.BluetoothHidDevice, API 28+).
  *
- * Notes kept in docs/NOTES.md:
- *  - Report payloads passed to sendReport() exclude the report-id byte; the
- *    platform sendReport(host, id, data) overload carries the id separately.
- *  - Host->device output reports (e.g. keyboard LEDs) are surfaced through
- *    onInterruptData; LED decoding happens in the codec.
+ * Lifecycle rules learned from on-device testing (see docs/NOTES.md):
+ *  - The profile proxy is obtained ONCE and kept for the app's lifetime;
+ *    closing/re-requesting it during a profile swap is racy and leaves the
+ *    stack unable to register or connect again.
+ *  - Swapping the registered app must: disconnect -> unregister -> settle
+ *    -> register. Registering while an app is still registered fails.
+ *  - Connection callbacks are matched against the connect/disconnect target
+ *    so stale events from a previous host cannot fail a new connection.
  */
 class BluetoothHidTransport(
     private val context: Context,
@@ -57,6 +61,9 @@ class BluetoothHidTransport(
     @Volatile private var proxyResult: CompletableDeferred<Boolean>? = null
     @Volatile private var registerResult: CompletableDeferred<Boolean>? = null
     @Volatile private var connectResult: CompletableDeferred<Boolean>? = null
+    @Volatile private var connectTarget: BluetoothDevice? = null
+    @Volatile private var disconnectResult: CompletableDeferred<Boolean>? = null
+    @Volatile private var disconnectTarget: BluetoothDevice? = null
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, isRegistered: Boolean) {
@@ -74,11 +81,10 @@ class BluetoothHidTransport(
                 }
             }
             registerResult?.complete(isRegistered)
-            registerResult = null
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice?, connectionState: Int) {
-            Log.i(TAG, "onConnectionStateChanged state=$connectionState")
+            Log.i(TAG, "onConnectionStateChanged device=${device?.address} state=$connectionState")
             when (connectionState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     host = device
@@ -89,22 +95,37 @@ class BluetoothHidTransport(
                             hostName = safeName(device),
                         )
                     }
-                    connectResult?.complete(true)
-                    connectResult = null
+                    if (connectTarget != null && device?.address == connectTarget?.address) {
+                        connectResult?.complete(true)
+                    }
                 }
+
                 BluetoothProfile.STATE_CONNECTING -> {
                     _state.update {
                         it.copy(phase = TransportPhase.CONNECTING, hostAddress = device?.address)
                     }
                 }
+
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    _state.update {
-                        it.copy(
-                            phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE,
-                        )
+                    if (disconnectTarget != null && device?.address == disconnectTarget?.address) {
+                        disconnectResult?.complete(true)
                     }
-                    connectResult?.complete(false)
-                    connectResult = null
+                    // A DISCONNECTED for the connect target means the attempt failed.
+                    if (connectTarget != null && device?.address == connectTarget?.address) {
+                        connectResult?.complete(false)
+                    }
+                    // Stale events for a previous host must not clear a new connection.
+                    val currentHost = host
+                    if (device == null || currentHost == null || device.address == currentHost.address) {
+                        host = null
+                        _state.update {
+                            it.copy(
+                                phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE,
+                                hostAddress = null,
+                                hostName = null,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -121,13 +142,10 @@ class BluetoothHidTransport(
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (profile == BluetoothProfile.HID_DEVICE && proxy is BluetoothHidDevice) {
                 hidDevice = proxy
-                _state.update { it.copy(phase = TransportPhase.REGISTERING) }
                 proxyResult?.complete(true)
-                proxyResult = null
             } else {
                 _state.update { it.copy(phase = TransportPhase.FAILED, message = "HID device profile unavailable") }
                 proxyResult?.complete(false)
-                proxyResult = null
             }
         }
 
@@ -151,35 +169,43 @@ class BluetoothHidTransport(
             return false
         }
 
-        _state.update { it.copy(phase = TransportPhase.OBTAINING_PROXY) }
-        val deferred = CompletableDeferred<Boolean>()
-        proxyResult = deferred
-
-        val gotProxy = try {
-            a.getProfileProxy(context, proxyListener, BluetoothProfile.HID_DEVICE)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "getProfileProxy failed", e)
-            false
-        }
-
-        if (!gotProxy) {
+        // Obtain the proxy once and keep it for the app's lifetime.
+        if (hidDevice == null) {
+            _state.update { it.copy(phase = TransportPhase.OBTAINING_PROXY) }
+            val deferred = CompletableDeferred<Boolean>()
+            proxyResult = deferred
+            val gotProxy = try {
+                a.getProfileProxy(context, proxyListener, BluetoothProfile.HID_DEVICE)
+            } catch (e: SecurityException) {
+                Log.e(TAG, "getProfileProxy failed", e)
+                false
+            }
+            if (!gotProxy) {
+                proxyResult = null
+                _state.update { it.copy(phase = TransportPhase.FAILED, message = "getProfileProxy failed") }
+                return false
+            }
+            val proxyOk = withTimeoutOrNull(PROXY_TIMEOUT_MS) { deferred.await() } == true
             proxyResult = null
-            _state.update { it.copy(phase = TransportPhase.FAILED, message = "getProfileProxy failed") }
-            return false
+            if (!proxyOk || hidDevice == null) {
+                _state.update { it.copy(phase = TransportPhase.FAILED, message = "HID proxy unavailable") }
+                return false
+            }
         }
 
-        // Proxy connects asynchronously; registration happens once we have it.
-        val proxyObtained = withTimeoutOrNull(PROXY_TIMEOUT_MS) { deferred.await() }
-        if (proxyObtained != true || hidDevice == null) {
-            proxyResult = null
-            _state.update { it.copy(phase = TransportPhase.FAILED, message = "HID proxy unavailable") }
-            return false
+        // Swap flow: if an app is registered, unregister and let the stack settle.
+        if (registered) {
+            if (!unregisterAppAndWait()) {
+                // Best effort: proceed, registerApp will fail if still registered.
+                delay(SETTLE_MS)
+            } else {
+                delay(SETTLE_MS)
+            }
         }
 
-        // Now actually register the app with the compiled identity.
         val registerDeferred = CompletableDeferred<Boolean>()
         registerResult = registerDeferred
-        _state.update { it.copy(phase = TransportPhase.REGISTERING) }
+        _state.update { it.copy(phase = TransportPhase.REGISTERING, message = null) }
         val sdp = BluetoothHidDeviceAppSdpSettings(
             compiled.deviceName,
             compiled.description,
@@ -208,7 +234,9 @@ class BluetoothHidTransport(
 
     override suspend fun connect(hostAddress: String): Boolean {
         if (!hasConnectPermission()) return false
-        val a = adapter ?: return false
+        val a = adapter
+            ?: (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
         val device = try {
             a.getRemoteDevice(hostAddress)
         } catch (e: IllegalArgumentException) {
@@ -218,10 +246,30 @@ class BluetoothHidTransport(
             _state.update { it.copy(phase = TransportPhase.FAILED, message = "Host is not bonded/paired") }
             return false
         }
-        val hid = hidDevice ?: return false
+        val hid = hidDevice
+        if (hid == null || !registered) {
+            _state.update { it.copy(phase = TransportPhase.FAILED, message = "No active HID profile — activate a profile first") }
+            return false
+        }
+
+        // Idempotent: already connected to this host.
+        if (_state.value.phase == TransportPhase.CONNECTED && host?.address == hostAddress) {
+            return true
+        }
+
+        // If connected to a different host, disconnect cleanly and settle first.
+        val current = host
+        if (current != null && current.address != hostAddress) {
+            disconnectAndWait(current)
+            delay(SETTLE_MS)
+        }
+
         val deferred = CompletableDeferred<Boolean>()
         connectResult = deferred
-        _state.update { it.copy(phase = TransportPhase.CONNECTING, hostAddress = hostAddress, hostName = safeName(device)) }
+        connectTarget = device
+        _state.update {
+            it.copy(phase = TransportPhase.CONNECTING, hostAddress = hostAddress, hostName = safeName(device))
+        }
         val initiated = try {
             hid.connect(device)
         } catch (e: SecurityException) {
@@ -230,9 +278,13 @@ class BluetoothHidTransport(
         }
         if (!initiated) {
             connectResult = null
+            connectTarget = null
+            _state.update { it.copy(phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE) }
             return false
         }
         val connected = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { deferred.await() } ?: false
+        connectResult = null
+        connectTarget = null
         if (!connected) {
             _state.update { it.copy(phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE) }
         }
@@ -240,37 +292,22 @@ class BluetoothHidTransport(
     }
 
     override suspend fun disconnect() {
-        val hid = hidDevice ?: return
         val device = host ?: return
-        try {
-            hid.disconnect(device)
-        } catch (e: SecurityException) {
-            Log.w(TAG, "disconnect failed", e)
-        }
-        host = null
-        _state.update { it.copy(phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE) }
+        disconnectAndWait(device)
     }
 
     override suspend fun unregister() {
-        val hid = hidDevice
-        val a = adapter
+        val currentHost = host
+        if (currentHost != null) {
+            disconnectAndWait(currentHost)
+        }
+        if (registered) {
+            unregisterAppAndWait()
+        }
         registered = false
-        if (hid != null) {
-            try {
-                hid.unregisterApp()
-            } catch (e: SecurityException) {
-                Log.w(TAG, "unregisterApp failed", e)
-            }
-        }
-        if (hid != null && a != null) {
-            try {
-                a.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
-            } catch (_: Exception) {
-            }
-        }
-        hidDevice = null
         host = null
         _state.update { TransportState() }
+        // The profile proxy stays bound and is reused by the next register().
     }
 
     override suspend fun sendReport(reportId: Int, payload: ByteArray): Boolean {
@@ -297,6 +334,51 @@ class BluetoothHidTransport(
         }
     }
 
+    // ---------------------------------------------------------------- private
+
+    /** Unregisters the app and waits for onAppStatusChanged(false). */
+    private suspend fun unregisterAppAndWait(): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        registerResult = deferred
+        return try {
+            hidDevice?.unregisterApp()
+            val done = withTimeoutOrNull(UNREGISTER_TIMEOUT_MS) { deferred.await() }
+            done != null
+        } catch (e: SecurityException) {
+            Log.w(TAG, "unregisterApp failed", e)
+            false
+        } finally {
+            registerResult = null
+        }
+    }
+
+    /** Disconnects a specific device and waits for the state callback. */
+    private suspend fun disconnectAndWait(device: BluetoothDevice) {
+        val hid = hidDevice ?: return
+        val deferred = CompletableDeferred<Boolean>()
+        disconnectResult = deferred
+        disconnectTarget = device
+        try {
+            hid.disconnect(device)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "disconnect failed", e)
+        }
+        withTimeoutOrNull(DISCONNECT_TIMEOUT_MS) { deferred.await() }
+        disconnectResult = null
+        disconnectTarget = null
+        // Fallback if no callback arrived.
+        if (host == null || host?.address == device.address) {
+            host = null
+            _state.update {
+                it.copy(
+                    phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE,
+                    hostAddress = null,
+                    hostName = null,
+                )
+            }
+        }
+    }
+
     private fun hasConnectPermission(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
@@ -315,6 +397,9 @@ class BluetoothHidTransport(
         private const val TAG = "MorphHidTransport"
         private const val PROXY_TIMEOUT_MS = 5_000L
         private const val REGISTER_TIMEOUT_MS = 10_000L
+        private const val UNREGISTER_TIMEOUT_MS = 5_000L
         private const val CONNECT_TIMEOUT_MS = 20_000L
+        private const val DISCONNECT_TIMEOUT_MS = 5_000L
+        private const val SETTLE_MS = 500L
     }
 }
