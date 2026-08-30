@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "device": {
+    "name": "Presenter",
+    "description": "Presentation clicker with laser (haptic) and cursor pad",
+    "hid": {
+      "subclass": "combo",
+      "collections": [
+        { "type": "pointer", "reportId": 1, "buttons": 2, "relativeAxes": ["x", "y"] },
+        { "type": "consumer", "reportId": 2, "usages": ["playPause", "nextTrack", "prevTrack"] }
+      ]
+    }
+  },
+  "ui": {
+    "screens": [
+      {
+        "id": "main",
+        "title": "Presenter",
+        "layout": { "type": "grid", "columns": 2 },
+        "widgets": [
+          { "type": "button", "id": "prev", "label": "◀ Prev", "onTap": { "type": "key", "key": "consumer.prevTrack" } },
+          { "type": "button", "id": "next", "label": "Next ▶", "onTap": { "type": "key", "key": "consumer.nextTrack" } },
+          { "type": "button", "id": "play", "label": "⏯", "onTap": { "type": "key", "key": "consumer.playPause" } },
+          { "type": "button", "id": "laser", "label": "Laser", "onTap": { "type": "macro", "macro": "laser" } },
+          { "type": "label", "id": "hint", "text": "Drag to move cursor, tap to click" },
+          { "type": "pointerPad", "id": "pad", "sensitivity": 1.0, "tapButton": 1 }
+        ]
+      }
+    ]
+  },
+  "macros": {
+    "laser": { "steps": [ { "type": "haptic", "ms": 150 } ] }
+  }
+}
