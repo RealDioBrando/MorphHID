@@ -189,6 +189,46 @@ class HidDescriptorCompilerTest {
     }
 
     @Test
+    fun `pointer descriptor uses a buttonless flat layout when no buttons`() {
+        val profile = Profile(
+            device = DeviceSpec(
+                name = "AxisOnly",
+                hid = HidSpec(
+                    subclass = "none",
+                    collections = listOf(
+                        HidCollectionSpec.Pointer(buttons = 0, relativeAxes = listOf("x", "y")),
+                    ),
+                ),
+            ),
+        )
+        val compiled = HidDescriptorCompiler().compile(profile)
+        // Flat: only the Application collection.
+        assertEquals(1, compiled.descriptor.toList().count { it == 0xC0.toByte() })
+        // 2-byte report: x + y deltas.
+        assertEquals(2, compiled.reports.single().inputBytes)
+        assertTrue(compiled.findControl("pointer.button1") == null)
+    }
+
+    @Test
+    fun `pointer descriptor nests a physical collection when buttons exist`() {
+        val profile = Profile(
+            device = DeviceSpec(
+                name = "Mouse",
+                hid = HidSpec(
+                    subclass = "mouse",
+                    collections = listOf(
+                        HidCollectionSpec.Pointer(buttons = 3, relativeAxes = listOf("x", "y")),
+                    ),
+                ),
+            ),
+        )
+        val compiled = HidDescriptorCompiler().compile(profile)
+        assertEquals(2, compiled.descriptor.toList().count { it == 0xC0.toByte() })
+        // Buttons byte first, then x, y.
+        assertEquals(3, compiled.reports.single().inputBytes)
+    }
+
+    @Test
     fun `modifier aliases resolve to the same usages`() {
         val compiled = HidDescriptorCompiler().compile(keyboardProfile())
         assertEquals(0xE1, compiled.findControl("keyboard.shift")!!.usage)

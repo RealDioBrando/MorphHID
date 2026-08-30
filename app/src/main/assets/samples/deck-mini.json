@@ -9,7 +9,7 @@
       "collections": [
         { "type": "keyboard", "reportId": 1 },
         { "type": "consumer", "reportId": 2, "usages": ["playPause", "volumeUp", "volumeDown", "mute", "nextTrack", "prevTrack"] },
-        { "type": "pointer", "reportId": 3, "buttons": 2, "relativeAxes": ["x", "y"] }
+        { "type": "pointer", "reportId": 3, "buttons": 3, "relativeAxes": ["x", "y", "wheel"] }
       ]
     }
   },

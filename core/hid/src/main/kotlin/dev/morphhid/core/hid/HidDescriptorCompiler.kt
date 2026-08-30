@@ -186,12 +186,19 @@ class HidDescriptorCompiler {
         val buttons = c.buttons.coerceIn(0, 32)
         val relAxes = c.relativeAxes.filter { it in setOf("x", "y", "wheel") }.distinct()
         val absAxes = c.absoluteAxes.filter { it in setOf("x", "y") }.distinct()
+        if (buttons <= 0 && relAxes.isEmpty() && absAxes.isEmpty()) {
+            throw IllegalArgumentException(
+                "pointer collection (report $reportId) declares no buttons and no axes"
+            )
+        }
 
         b.global(ITEM_USAGE_PAGE, UsagePages.GENERIC_DESKTOP)
         b.local(ITEM_USAGE, GenericDesktopUsages.MOUSE)
         b.main(ITEM_COLLECTION, COLL_APPLICATION)
-        b.local(ITEM_USAGE, GenericDesktopUsages.POINTER)
-        b.main(ITEM_COLLECTION, COLL_PHYSICAL)
+        if (buttons > 0) {
+            b.local(ITEM_USAGE, GenericDesktopUsages.POINTER)
+            b.main(ITEM_COLLECTION, COLL_PHYSICAL)
+        }
 
         b.global(ITEM_REPORT_ID, reportId)
 
@@ -260,7 +267,9 @@ class HidDescriptorCompiler {
             }
         }
 
-        b.main(ITEM_END_COLLECTION, 0)
+        if (buttons > 0) {
+            b.main(ITEM_END_COLLECTION, 0)
+        }
         b.main(ITEM_END_COLLECTION, 0)
 
         val inputBytes = buttonBytes + relAxes.size + absAxes.size

@@ -24,6 +24,11 @@ Done:
 - JVM tests: descriptor golden, codec, macro timing, control session,
   validator.
 
+Session 4 (on-device): Windows shows phone as 'PC' (CoD is OS-level, cosmetic —
+see notes) and Android host ignored pointer/clicks — fixed by restructuring
+the pointer descriptor (physical collection only when buttons present;
+samples now declare 3 buttons + wheel for full mouse compatibility).
+
 Session 3 (on-device): keyboard works to Android host. Pointer pad typed
 garbage -> gamepad hat encoder OR-vs-mask bug + macro interleaving race,
 both fixed. Windows pairing flow clarified (host-initiated add-device;
@@ -48,6 +53,22 @@ Not done yet (next up):
 ## Critical knowledge / gotchas
 
 ### BluetoothHidDevice
+- **Windows classing the phone as a "PC": Windows reads the Bluetooth
+  Class-of-Device advertised by the phone (set by the OS, apps cannot change
+  it) and shows a generic device icon — the SDP HID record our
+  registerApp() creates is only visible to hosts that enumerate HID
+  services. The visual category is cosmetic; the test is whether Device
+  Manager gains HID keyboard/mouse entries after connecting. If Windows
+  offers no keyboard/mouse services, the likely cause is that registration
+  was not active at discovery time — activate the profile BEFORE "Add
+  device", and wait for the status card to say "Registered".** If the phone
+  was previously paired with a different profile, remove it from Windows
+  first (cached SDP/descriptor).
+- **Pointer descriptor fix: a buttonless pointer previously still wrapped
+  its fields in a Pointer PHYSICAL collection with no parent usage — some
+  hosts reject that. The compiler now emits the physical collection only
+  when buttons exist (canonical mouse form), otherwise a flat
+  Application collection.**
 - **Windows pairing flow (learned on-device): Windows does NOT accept
   phone-initiated `hidDevice.connect()`. The working flow is the reverse:
   activate a profile in MorphHID first, then on Windows go to

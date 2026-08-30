@@ -6,7 +6,7 @@
     "hid": {
       "subclass": "combo",
       "collections": [
-        { "type": "pointer", "reportId": 1, "buttons": 2, "relativeAxes": ["x", "y"] },
+        { "type": "pointer", "reportId": 1, "buttons": 3, "relativeAxes": ["x", "y", "wheel"] },
         { "type": "consumer", "reportId": 2, "usages": ["playPause", "nextTrack", "prevTrack"] }
       ]
     }

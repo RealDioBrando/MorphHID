@@ -7,7 +7,7 @@
       "subclass": "combo",
       "collections": [
         { "type": "keyboard", "reportId": 1 },
-        { "type": "pointer", "reportId": 2, "buttons": 2, "relativeAxes": ["x", "y"] }
+        { "type": "pointer", "reportId": 2, "buttons": 3, "relativeAxes": ["x", "y", "wheel"] }
       ]
     }
   },
