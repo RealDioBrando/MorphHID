@@ -163,6 +163,36 @@ class ControlSessionTest {
     }
 
     @Test
+    fun `ui macros are serialized so typed characters never interleave`() = runTest {
+        val transport = FakeTransport()
+        val session = ControlSession(transport, scope = backgroundScope)
+        session.activate(profile(), HidDescriptorCompiler().compile(profile()))
+
+        session.runAdhoc(
+            Actor.Human(), "a",
+            listOf(MacroStep.Type(text = "aaaa", keyDelayMs = 10, jitterMs = 0)),
+        )
+        session.runAdhoc(
+            Actor.Human(), "b",
+            listOf(MacroStep.Type(text = "bbbb", keyDelayMs = 10, jitterMs = 0)),
+        )
+        advanceTimeBy(10_000)
+        advanceUntilIdle()
+
+        // Extract the pressed key usage from each keyboard report.
+        val presses = transport.sent
+            .filter { it.first == 1 }
+            .map { it.second[2].toInt() and 0xFF }
+            .filter { it != 0 }
+            .map { ('a' + (it - 0x04)).toChar().toString() }
+            .joinToString("")
+        assertTrue(
+            "interleaved: $presses",
+            presses == "aaaabbbb" || presses == "bbbbaaaa",
+        )
+    }
+
+    @Test
     fun `reactivating the same profile keeps the connection`() = runTest {
         val transport = FakeTransport()
         val session = ControlSession(transport, scope = backgroundScope)

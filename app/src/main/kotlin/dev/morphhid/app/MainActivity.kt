@@ -389,9 +389,12 @@ private fun PairingScreen(
                 Column(Modifier.padding(14.dp)) {
                     Text("How to connect", fontSize = 15.sp)
                     Text(
-                        "1. Pair this phone with the host computer from Android Bluetooth settings first.\n" +
-                            "2. The host then appears below; tap it to connect as HID.\n" +
-                            "3. If the host already knows this phone, just tap it.\n\n" +
+                        "Option A — Windows / macOS / Linux:\n" +
+                            "1. Activate a profile in MorphHID first.\n" +
+                            "2. On the computer, open Bluetooth settings and add a new device.\n" +
+                            "3. The computer discovers this phone, connects to it, and it appears as an HID device (keyboard/mouse). MorphHID accepts the connection automatically.\n\n" +
+                            "Option B — Android host:\n" +
+                            "Pair from Android Bluetooth settings first, then tap the host below to connect.\n\n" +
                             "If connect fails after switching profiles: hosts cache the old device layout. " +
                             "Remove this phone from the host's Bluetooth devices and pair again.",
                         fontSize = 12.sp,

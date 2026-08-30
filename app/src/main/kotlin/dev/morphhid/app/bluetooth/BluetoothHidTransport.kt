@@ -87,12 +87,21 @@ class BluetoothHidTransport(
             Log.i(TAG, "onConnectionStateChanged device=${device?.address} state=$connectionState")
             when (connectionState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    // Hosts (notably Windows) connect TO the phone after the
+                    // user triggers "Add Bluetooth device" while a profile is
+                    // activated. Accept any bonded host automatically; the
+                    // connect() flow below completes its own target.
+                    val autoAccept = device != null &&
+                        device.bondState == BluetoothDevice.BOND_BONDED
                     host = device
                     _state.update {
                         it.copy(
                             phase = TransportPhase.CONNECTED,
                             hostAddress = device?.address,
                             hostName = safeName(device),
+                            message = if (autoAccept && connectTarget == null) {
+                                "Host connected"
+                            } else null,
                         )
                     }
                     if (connectTarget != null && device?.address == connectTarget?.address) {

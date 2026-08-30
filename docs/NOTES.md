@@ -24,6 +24,11 @@ Done:
 - JVM tests: descriptor golden, codec, macro timing, control session,
   validator.
 
+Session 3 (on-device): keyboard works to Android host. Pointer pad typed
+garbage -> gamepad hat encoder OR-vs-mask bug + macro interleaving race,
+both fixed. Windows pairing flow clarified (host-initiated add-device;
+transport auto-accepts bonded hosts). New keyboard+mouse sample profile.
+
 Session 2 (on-device bug fixes): back navigation exited the app -> added
 BackHandler; 'keyboard.shift' was unknown -> added shift/ctrl/alt/gui/win
 aliases mapping to the left-hand modifiers; connect failed after profile
@@ -43,6 +48,23 @@ Not done yet (next up):
 ## Critical knowledge / gotchas
 
 ### BluetoothHidDevice
+- **Windows pairing flow (learned on-device): Windows does NOT accept
+  phone-initiated `hidDevice.connect()`. The working flow is the reverse:
+  activate a profile in MorphHID first, then on Windows go to
+  Bluetooth → "Add device" — Windows discovers the phone and connects TO it.
+  The transport now auto-accepts CONNECTED events from any bonded host.
+  Phone-initiated connect() is still used for Android hosts.** "Displays as a
+  phone" in Windows settings is normal — check Device Manager for the HID
+  keyboard/mouse entries.
+- **Report encoder bug found on-device: gamepad hat encoding used OR instead
+  of masking the nibble, which corrupted neighboring absolute-axis bytes.
+  This is why the pointer pad "typed characters" — the host parsed corrupted
+  gamepad reports. Fixed with `(b and 0xF0) or hat`.**
+- **UI macros now serialize (semaphore) so a "type text" binding can never
+  interleave with another binding's key events.**
+- PointerPad tap-click rewritten with a single awaitEachGesture handler
+  (drag accumulates; tap only when total movement < touch slop). The old
+  chained detectDragGestures + detectTapGestures did not produce taps.
 - **Profile-swap lifecycle (learned from on-device testing, Android 12 & 16):
   closing the profile proxy and re-requesting it during a profile switch is
   RACY — the service re-bind can silently fail, after which neither

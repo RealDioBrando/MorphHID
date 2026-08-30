@@ -239,7 +239,7 @@ class ReportCodec(private val compiled: CompiledHid) {
         if (hatControl != null) {
             val idx = hatControl.bitOffset / 8
             val hat = (hatValues[reportId] ?: HAT_NEUTRAL) and 0x0F
-            payload[idx] = (payload[idx].toInt() or hat).toByte()
+            payload[idx] = ((payload[idx].toInt() and 0xF0) or hat).toByte()
         }
         for (c in controlsOf(reportId, ControlKind.AXIS)) {
             val idx = c.bitOffset / 8

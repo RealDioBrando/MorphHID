@@ -1,5 +1,7 @@
 package dev.morphhid.core.control
 
+import kotlinx.coroutines.sync.Semaphore
+
 import dev.morphhid.core.hid.CompiledHid
 import dev.morphhid.core.hid.ControlKind
 import dev.morphhid.core.hid.ReportCodec
@@ -62,6 +64,8 @@ class ControlSession(
 
     private val macroJobs = HashMap<String, Job>()
     private val macroQueues = HashMap<String, MutableList<Pair<Actor, String>>>()
+    /** Serializes UI macros so human and agent launches never interleave. */
+    private val uiMacroLimiter = Semaphore(permits = 1)
 
     init {
         scope.launch {
@@ -315,6 +319,9 @@ class ControlSession(
         val key = "adhoc:" + label
         mutex.withLock { macroJobs[key]?.cancel() }
         val job = scope.launch {
+            // UI macros serialize so that (e.g.) typing does not interleave
+            // with other bindings. Cancellation releases the permit too.
+            uiMacroLimiter.acquire()
             try {
                 MacroRuntime(MacroHostImpl(actor)).execute(resolved)
                 record(actor, "binding", label, "ok", "steps=" + resolved.size)
@@ -327,11 +334,13 @@ class ControlSession(
                 mutex.withLock {
                     if (macroJobs[key] == coroutineContext[Job]) macroJobs.remove(key)
                 }
+                uiMacroLimiter.release()
             }
         }
         mutex.withLock { macroJobs[key] = job }
         return OpResult.Ok
     }
+
     fun listControls(actor: Actor): List<String> {
         val check = policy.check(actor, ActionKind.READ, null)
         if (check !is OpResult.Ok) return emptyList()

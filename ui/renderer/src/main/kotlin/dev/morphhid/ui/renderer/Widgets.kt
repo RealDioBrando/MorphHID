@@ -27,6 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.positionChange
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.morphhid.core.profile.BindingSpec
@@ -307,26 +310,38 @@ fun PointerPadWidget(widget: WidgetSpec.PointerPad, host: WidgetHost, modifier: 
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .pointerInput(widget.id) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    host.onPointerDelta(dragAmount.x * widget.sensitivity, dragAmount.y * widget.sensitivity)
-                }
-            }
-            .pointerInput(widget.id) {
-                detectTapGestures(
-                    onTap = {
-                        val button = widget.tapButton ?: return@detectTapGestures
-                        val keyId = "pointer.button$button"
-                        host.onKey(keyId, true)
-                        scope.launch {
-                            delay(60)
-                            host.onKey(keyId, false)
+                val slop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dragDistance = 0f
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            val delta = change.positionChange()
+                            if (delta != androidx.compose.ui.geometry.Offset.Zero) {
+                                dragDistance += delta.getDistance()
+                                host.onPointerDelta(delta.x * widget.sensitivity, delta.y * widget.sensitivity)
+                                change.consume()
+                            }
                         }
-                    },
-                )
+                    } finally {
+                        // Tap = press and release the configured button.
+                        if (dragDistance < slop) {
+                            val button = widget.tapButton ?: return@awaitEachGesture
+                            val keyId = "pointer.button$button"
+                            host.onKey(keyId, true)
+                            scope.launch {
+                                delay(60)
+                                host.onKey(keyId, false)
+                            }
+                        }
+                    }
+                }
             },
     ) {
-        // subtle cross-hatch to indicate a touch surface
+        // Subtle cross-hatch to indicate a touch surface.
         val line = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f)
         val step = size.width / 6f
         var x = step
