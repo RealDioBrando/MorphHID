@@ -64,20 +64,44 @@ class ProfileRepository(private val context: Context) {
 
     fun readText(fileName: String): String? = File(dir, fileName).takeIf { it.exists() }?.readText()
 
-    /** Copies bundled sample profiles into the store once. */
+    /**
+     * Keeps bundled sample profiles in sync with the APK. Assets are only
+     * rewritten when their fingerprint changes, so users keep custom
+     * imported profiles while still receiving fixed sample layouts/macros.
+     */
     fun ensureSamples() {
         try {
-            context.assets.list("samples")?.forEach { name ->
+            val names = context.assets.list("samples") ?: return
+            val fingerprint = sampleFingerprint(names) ?: return
+            val prefs = context.getSharedPreferences("morphhid_samples", Context.MODE_PRIVATE)
+            if (prefs.getString("samples_fingerprint", null) == fingerprint) return
+
+            names.forEach { name ->
                 val target = File(dir, name)
-                if (!target.exists()) {
-                    context.assets.open("samples/$name").use { input ->
-                        target.outputStream().use { output -> input.copyTo(output) }
-                    }
+                context.assets.open("samples/$name").use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
                 }
             }
+            prefs.edit().putString("samples_fingerprint", fingerprint).apply()
         } catch (e: Exception) {
             android.util.Log.w("ProfileRepository", "sample copy failed", e)
         }
+    }
+
+    private fun sampleFingerprint(names: Array<String>): String? {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        for (name in names.sorted()) {
+            digest.update(name.toByteArray(Charsets.UTF_8))
+            context.assets.open("samples/$name").use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    digest.update(buffer, 0, read)
+                }
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun parse(f: File): Result<Profile> = parse(f.name, f.readText()).let {
