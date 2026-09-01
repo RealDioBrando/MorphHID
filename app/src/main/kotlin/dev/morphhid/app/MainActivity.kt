@@ -146,6 +146,22 @@ private fun HomeScreen(
     var message by remember { mutableStateOf<String?>(null) }
     val sessionState by controller.session.state.collectAsState()
 
+    val discoverableLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { }
+    fun requestDiscoverable() {
+        if (controller.transport.setDiscoverable(300)) return
+        try {
+            discoverableLauncher.launch(
+                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                },
+            )
+        } catch (e: Exception) {
+            message = "Cannot start discoverable: ${e.message}"
+        }
+    }
+
     // Runtime permissions (BLUETOOTH_CONNECT on S+, notifications on 33+).
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -251,6 +267,11 @@ private fun HomeScreen(
                             enabled = !stored.hasErrors,
                             onClick = {
                                 controller.activateProfile(stored)
+                                // Android 15/16 may remove the hidden setScanMode API.
+                                // Request the supported system discoverable flow while
+                                // this Activity is foregrounded so hosts can discover
+                                // the newly registered HID SDP record.
+                                requestDiscoverable()
                                 onOpenRuntime()
                             },
                         ) { Text("Activate") }
@@ -383,6 +404,25 @@ private fun PairingScreen(
     var discoverable by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
+    val discoverableLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { discoverable = controller.transport.isDiscoverable() }
+    fun requestDiscoverable() {
+        if (controller.transport.setDiscoverable(300)) {
+            discoverable = true
+            return
+        }
+        try {
+            discoverableLauncher.launch(
+                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                },
+            )
+        } catch (e: Exception) {
+            message = "Cannot start discoverable: ${e.message}"
+        }
+    }
+
     LaunchedEffect(Unit) {
         hosts = controller.transport.bondedHosts()
         discoverable = controller.transport.isDiscoverable()
@@ -428,20 +468,9 @@ private fun PairingScreen(
                 Button(
                     enabled = !discoverable,
                     onClick = {
-                        // Try silent reflection first.
-                        val ok = controller.transport.setDiscoverable(300)
-                        if (!ok) {
-                            // Fallback: system intent (shows a dialog).
-                            try {
-                                val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                message = "Cannot start discoverable: ${e.message}"
-                            }
-                        }
-                        discoverable = controller.transport.isDiscoverable()
+                        // Hidden setScanMode is unavailable on many Android 15/16
+                        // builds; use the supported activity-result request.
+                        requestDiscoverable()
                     },
                 ) { Text("Make Discoverable") }
                 OutlinedButton(onClick = {
@@ -465,8 +494,8 @@ private fun PairingScreen(
                             "   b. On this phone: tap 'Unpair' next to the computer below.\n" +
                             "   (Old cached pairing data prevents Windows from seeing the HID service.)\n\n" +
                             "4. On the computer: open Bluetooth → Add device.\n" +
-                            "   The computer discovers this phone and connects automatically.\n" +
-                            "   MorphHID shows 'Connected' — check Device Manager for HID entries.\n\n" +
+                            "   When pairing finishes, MorphHID automatically connects from the phone.\n" +
+                            "   If it does not, remove the pairing on both sides and try again.\n\n" +
                             "Note: Windows may show the phone as 'PC' or a generic icon — this is " +
                             "cosmetic (Bluetooth Class-of-Device is OS-controlled). The real test " +
                             "is whether Device Manager gains HID Keyboard/Mouse entries.",

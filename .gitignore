@@ -10,3 +10,4 @@ captures/
 *.apk.idsig
 .kotlin/
 .gradle-dist/
+.gradle-user/

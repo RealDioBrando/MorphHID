@@ -7,7 +7,10 @@ import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -18,7 +21,11 @@ import dev.morphhid.core.control.TransportPhase
 import dev.morphhid.core.control.TransportState
 import dev.morphhid.core.hid.CompiledHid
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -47,6 +54,10 @@ class BluetoothHidTransport(
 
     private val executor = java.util.concurrent.Executor { it.run() }
 
+    /** Auto-connects to a host immediately after it finishes bonding. */
+    private val autoConnectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var bondReceiver: BroadcastReceiver? = null
+
     private val _state = MutableStateFlow(TransportState())
     override val state: StateFlow<TransportState> = _state.asStateFlow()
 
@@ -57,6 +68,9 @@ class BluetoothHidTransport(
     private var hidDevice: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
     private var registered = false
+
+    /** Currently registered profile, used to answer host GET_REPORT requests. */
+    @Volatile private var activeCompiledHid: CompiledHid? = null
 
     @Volatile private var proxyResult: CompletableDeferred<Boolean>? = null
     @Volatile private var registerResult: CompletableDeferred<Boolean>? = null
@@ -139,6 +153,47 @@ class BluetoothHidTransport(
             }
         }
 
+        override fun onGetReport(device: BluetoothDevice?, type: Byte, id: Byte, bufferSize: Int) {
+            Log.i(
+                TAG,
+                "onGetReport device=${device?.address} type=${type.toInt() and 0xff} " +
+                    "id=${id.toInt() and 0xff} bufferSize=$bufferSize",
+            )
+            handleGetReport(device, type, id, bufferSize)
+        }
+
+        override fun onSetReport(device: BluetoothDevice?, reportType: Byte, reportId: Byte, data: ByteArray?) {
+            Log.i(
+                TAG,
+                "onSetReport device=${device?.address} type=${reportType.toInt() and 0xff} " +
+                    "id=${reportId.toInt() and 0xff} size=${data?.size}",
+            )
+            if (data != null && data.isNotEmpty()) {
+                _outputReports.tryEmit(OutputReport(reportId.toInt() and 0xff, data))
+            }
+        }
+
+        override fun onSetProtocol(device: BluetoothDevice?, protocol: Byte) {
+            Log.i(
+                TAG,
+                "onSetProtocol device=${device?.address} protocol=${protocol.toInt() and 0xff}",
+            )
+        }
+
+        override fun onVirtualCableUnplug(device: BluetoothDevice?) {
+            Log.w(TAG, "onVirtualCableUnplug device=${device?.address}")
+            if (device == null || host?.address == device.address) {
+                host = null
+                _state.update {
+                    it.copy(
+                        phase = if (registered) TransportPhase.REGISTERED else TransportPhase.IDLE,
+                        hostAddress = null,
+                        hostName = null,
+                    )
+                }
+            }
+        }
+
         override fun onInterruptData(device: BluetoothDevice?, reportId: Byte, data: ByteArray?) {
             if (data != null && data.isNotEmpty()) {
                 Log.d(TAG, "onInterruptData id=$reportId size=${data.size}")
@@ -212,6 +267,7 @@ class BluetoothHidTransport(
             }
         }
 
+        activeCompiledHid = compiled
         val registerDeferred = CompletableDeferred<Boolean>()
         registerResult = registerDeferred
         _state.update { it.copy(phase = TransportPhase.REGISTERING, message = null) }
@@ -222,6 +278,9 @@ class BluetoothHidTransport(
             compiled.subclassByte,
             compiled.descriptor,
         )
+        // Match the known-working Windows-compatible Android HID-device path.
+        // Both QoS arguments are intentionally null; an outgoing QoS flow spec
+        // caused Windows to leave the HID L2CAP channel pending.
         val ok = try {
             hidDevice?.registerApp(sdp, null, null, executor, callback) ?: false
         } catch (e: SecurityException) {
@@ -229,6 +288,7 @@ class BluetoothHidTransport(
             false
         }
         if (!ok) {
+            activeCompiledHid = null
             registerResult = null
             _state.update { it.copy(phase = TransportPhase.FAILED, message = "registerApp returned false") }
             return false
@@ -236,9 +296,13 @@ class BluetoothHidTransport(
         val result = withTimeoutOrNull(REGISTER_TIMEOUT_MS) { registerDeferred.await() } ?: false
         registerResult = null
         if (!result) {
+            activeCompiledHid = null
             _state.update { it.copy(phase = TransportPhase.FAILED, message = "HID app registration failed/timed out") }
+            return false
         }
-        return result
+
+        registerBondReceiver()
+        return true
     }
 
     override suspend fun connect(hostAddress: String): Boolean {
@@ -315,6 +379,8 @@ class BluetoothHidTransport(
         }
         registered = false
         host = null
+        activeCompiledHid = null
+        unregisterBondReceiver()
         _state.update { TransportState() }
         // The profile proxy stays bound and is reused by the next register().
     }
@@ -450,6 +516,110 @@ class BluetoothHidTransport(
 
     // ---------------------------------------------------------------- private
 
+    /** Conservative GET_REPORT responder. */
+    private fun handleGetReport(
+        device: BluetoothDevice?,
+        type: Byte,
+        id: Byte,
+        bufferSize: Int,
+    ) {
+        val hid = hidDevice ?: return
+        if (device == null) return
+        val compiled = activeCompiledHid
+        val reportId = id.toInt() and 0xff
+        val report = compiled?.reportLayout(reportId)
+        val size = when (type) {
+            BluetoothHidDevice.REPORT_TYPE_INPUT -> report?.inputBytes
+            BluetoothHidDevice.REPORT_TYPE_OUTPUT -> report?.outputBytes
+            else -> null
+        }
+
+        if (report == null || size == null || size <= 0) {
+            val error = if (type == BluetoothHidDevice.REPORT_TYPE_FEATURE) {
+                BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ
+            } else {
+                BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID
+            }
+            reportErrorSafely(device, error)
+            return
+        }
+        if (bufferSize > 0 && bufferSize < size) {
+            reportErrorSafely(device, BluetoothHidDevice.ERROR_RSP_INVALID_PARAM)
+            return
+        }
+
+        val payload = ByteArray(size)
+        val replied = try {
+            hid.replyReport(device, type, id, payload)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "replyReport failed", e)
+            false
+        }
+        Log.i(TAG, "GET_REPORT reply id=$reportId size=$size ok=$replied")
+    }
+
+    private fun reportErrorSafely(device: BluetoothDevice, error: Byte) {
+        try {
+            hidDevice?.reportError(device, error)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "reportError failed", e)
+        }
+    }
+
+    /**
+     * Windows hosts pair successfully but often do not initiate the HID
+     * L2CAP connection themselves. Once a host finishes bonding while a
+     * MorphHID profile is active, immediately call connect() from the phone.
+     */
+    private fun registerBondReceiver() {
+        if (bondReceiver != null) return
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
+                val device = try {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                } catch (e: Exception) {
+                    null
+                } ?: return
+                val state = intent.getIntExtra(
+                    BluetoothDevice.EXTRA_BOND_STATE,
+                    BluetoothDevice.ERROR,
+                )
+                if (state != BluetoothDevice.BOND_BONDED || !registered || host != null) return
+
+                autoConnectScope.launch {
+                    delay(AUTO_CONNECT_DELAY_MS)
+                    if (registered && host == null) {
+                        Log.i(TAG, "Auto-connecting to newly bonded host ${device.address}")
+                        connect(device.address)
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+        bondReceiver = receiver
+    }
+
+    private fun unregisterBondReceiver() {
+        bondReceiver?.let { receiver ->
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to unregister bond receiver", e)
+            }
+        }
+        bondReceiver = null
+    }
+
     /** Unregisters the app and waits for onAppStatusChanged(false). */
     private suspend fun unregisterAppAndWait(): Boolean {
         val deferred = CompletableDeferred<Boolean>()
@@ -515,5 +685,8 @@ class BluetoothHidTransport(
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val DISCONNECT_TIMEOUT_MS = 5_000L
         private const val SETTLE_MS = 500L
+        // Give Windows time to finish pairing/SDP enumeration and install its
+        // HID driver before the phone initiates the HID L2CAP connection.
+        private const val AUTO_CONNECT_DELAY_MS = 3_000L
     }
 }

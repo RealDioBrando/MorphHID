@@ -3,22 +3,90 @@
   "device": {
     "name": "Basic Keyboard",
     "description": "Full QWERTY touch keyboard with modifier row",
-    "hid": { "subclass": "keyboard", "collections": [ { "type": "keyboard", "reportId": 1 } ] }
+    "hid": {
+      "subclass": "keyboard",
+      "collections": [
+        {
+          "type": "keyboard",
+          "reportId": 8
+        }
+      ]
+    }
   },
   "ui": {
     "screens": [
       {
         "id": "main",
         "title": "",
-        "layout": { "type": "grid", "columns": 4 },
+        "layout": {
+          "type": "grid",
+          "columns": 4
+        },
         "widgets": [
-          { "type": "keyGrid", "id": "qwerty", "rows": [
-            { "keys": ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"] },
-            { "keys": ["a", "s", "d", "f", "g", "h", "j", "k", "l"] },
-            { "keys": ["shift", "z", "x", "c", "v", "b", "n", "m", "backspace"] },
-            { "keys": ["leftCtrl", "leftAlt", "space", "leftAlt", "leftGui"] },
-            { "keys": ["left", "up", "down", "right", "enter"] }
-          ] }
+          {
+            "type": "keyGrid",
+            "id": "qwerty",
+            "rows": [
+              {
+                "keys": [
+                  "q",
+                  "w",
+                  "e",
+                  "r",
+                  "t",
+                  "y",
+                  "u",
+                  "i",
+                  "o",
+                  "p"
+                ]
+              },
+              {
+                "keys": [
+                  "a",
+                  "s",
+                  "d",
+                  "f",
+                  "g",
+                  "h",
+                  "j",
+                  "k",
+                  "l"
+                ]
+              },
+              {
+                "keys": [
+                  "shift",
+                  "z",
+                  "x",
+                  "c",
+                  "v",
+                  "b",
+                  "n",
+                  "m",
+                  "backspace"
+                ]
+              },
+              {
+                "keys": [
+                  "leftCtrl",
+                  "leftAlt",
+                  "space",
+                  "leftAlt",
+                  "leftGui"
+                ]
+              },
+              {
+                "keys": [
+                  "left",
+                  "up",
+                  "down",
+                  "right",
+                  "enter"
+                ]
+              }
+            ]
+          }
         ]
       }
     ]

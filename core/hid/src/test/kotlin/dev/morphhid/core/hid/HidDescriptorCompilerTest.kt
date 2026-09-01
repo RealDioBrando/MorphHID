@@ -28,11 +28,11 @@ class HidDescriptorCompilerTest {
         val expected = bytesOf(
             0x05, 0x01,             // Usage Page (Generic Desktop)
             0x09, 0x06,             // Usage (Keyboard)
-            0xA1, 0x01,    // Collection (Application)
+            0xA1, 0x01,             // Collection (Application)
             0x85, 0x01,             //   Report ID (1)
             0x05, 0x07,             //   Usage Page (Key Codes)
-            0x1A, 0xE0, 0x00, // Usage Min (224) - 2-byte item
-            0x2A, 0xE7, 0x00, // Usage Max (231) - 2-byte item
+            0x19, 0xE0,             //   Usage Min (224)
+            0x29, 0xE7,             //   Usage Max (231)
             0x15, 0x00,             //   Logical Min (0)
             0x25, 0x01,             //   Logical Max (1)
             0x75, 0x01,             //   Report Size (1)
@@ -40,7 +40,17 @@ class HidDescriptorCompilerTest {
             0x81, 0x02,             //   Input (Data, Var, Abs) - modifiers
             0x95, 0x01,             //   Report Count (1)
             0x75, 0x08,             //   Report Size (8)
-            0x81, 0x03,             //   Input (Const) - reserved byte
+            0x81, 0x01,             //   Input (Const, Array) - reserved byte
+            0x05, 0x08,             //   Usage Page (LEDs)
+            0x19, 0x01,             //   Usage Min (Num Lock)
+            0x29, 0x05,             //   Usage Max (Kana)
+            0x15, 0x00,
+            0x25, 0x01,
+            0x75, 0x01,
+            0x95, 0x05,
+            0x91, 0x02,             //   Output (Data, Var, Abs)
+            0x95, 0x03,
+            0x91, 0x01,             //   Output (Const, Array) - padding
             0x05, 0x07,             //   Usage Page (Key Codes)
             0x19, 0x00,             //   Usage Min (0)
             0x29, 0x65,             //   Usage Max (101)
@@ -49,17 +59,7 @@ class HidDescriptorCompilerTest {
             0x75, 0x08,             //   Report Size (8)
             0x95, 0x06,             //   Report Count (6)
             0x81, 0x00,             //   Input (Data, Array)
-            0x05, 0x08,             //   Usage Page (LEDs)
-            0x19, 0x01,             //   Usage Min (Num Lock)
-            0x29, 0x03,             //   Usage Max (Scroll Lock)
-            0x15, 0x00,
-            0x25, 0x01,
-            0x75, 0x01,
-            0x95, 0x03,
-            0x91, 0x02,             //   Output (Data, Var, Abs)
-            0x95, 0x05,
-            0x91, 0x03,             //   Output (Const) - padding
-            0xC0,          // End Collection
+            0xC0,                   // End Collection
         )
         assertArrayEquals(expected, compiled.descriptor)
 
@@ -80,6 +80,12 @@ class HidDescriptorCompilerTest {
         val caps = compiled.findControl("led.capsLock")
         assertEquals(ControlKind.LED, caps!!.kind)
         assertTrue(caps.isOutput)
+        val compose = compiled.findControl("led.compose")
+        assertEquals(ControlKind.LED, compose!!.kind)
+        assertTrue(compose.isOutput)
+        val kana = compiled.findControl("led.kana")
+        assertEquals(ControlKind.LED, kana!!.kind)
+        assertTrue(kana.isOutput)
     }
 
     @Test

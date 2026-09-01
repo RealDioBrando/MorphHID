@@ -2,6 +2,58 @@
 
 Living document so nothing gets lost between sessions. Ordered by topic.
 
+## Status (2026-09-01, session 7 - Windows triage paused
+
+Investigation paused at the user request; no live Windows pairing experiments should resume automatically.
+
+New findings:
+- Android-host keyboard input works smoothly. The pointer descriptor fix also resolves the pointer-pad garbage output on Android.
+- Windows continues to show the Android device with a phone-like Class of Device (`0x005A020C`) rather than a keyboard-like COD (`0x2540`), even after overriding `settings global bluetooth_class_of_device` and restarting/re-registering Bluetooth HID. On this Android 16 build, the setting does not change the advertised COD.
+- A same-device/same-host A/B test with a known-good reference HID Device app also failed to complete the HID L2CAP connection. This rules out MorphHID descriptor/profile registration as the sole cause.
+- Windows creates an SDP/BTHENUM node but no `HidBth`/`HIDClass` child. The L2CAP PSM request remains pending and eventually times out.
+- Correct WinRT Bluetooth address conversion is numeric, not byte-reversed: normalize the address to 12 hex digits and call `[Convert]::ToUInt64($hex, 16)`.
+- Legacy `BluetoothAuthenticateDeviceEx` reaches Android but returns Win32 error `1244`; the WinRT custom pairing path returns `RejectedByHandler`, `AuthenticationTimeout`, or `Failed`.
+
+Diagnostic tooling added:
+- `tools/windows/AuthenticateBluetoothDeviceEx.ps1`: registers `BluetoothRegisterForAuthenticationEx` and sends `BluetoothSendAuthenticationResponseEx`; supports wizard mode and non-NULL-OOB "blind" mode.
+- `tools/windows/PairBluetoothDevice.ps1`: WinRT custom-pairing harness.
+- `tools/windows/DiscoverBluetoothDevices.ps1`, `BluetoothRadioState.ps1`, and `RemoveBluetoothDevice.ps1`: inquiry/radio/cache helpers.
+- `tools/android/AutoAcceptBluetoothPrompt.ps1`: ADB/UIA prompt watcher used to automate Android permission and pairing dialogs.
+
+Paused state:
+- The callback-based wizard-mode attempt still returned `1244` without invoking the authentication callback.
+- A blind-mode attempt was intentionally aborted before it produced a usable conclusion. Do not treat it as success or failure.
+
+## Status (2026-08-31, session 6 - Windows L2CAP-pending compatibility pass
+
+Evidence from the last Windows capture:
+- Windows discovers MorphHID's HID SDP service and creates a BTHENUM device node.
+- That node has no `HidBth`/`HIDClass` child and no installed HID driver stack.
+- Android initiates the HID L2CAP connection; Windows replies PENDING, never sends the final connect response, and the ACL times out after ~30 seconds (`HCI_ERR_CONNECTION_TOUT`). No HID reports are exchanged.
+
+Changes made for the next controlled test:
+- `BluetoothHidTransport.registerApp()` now uses `(sdp, null, null, executor, callback)`, matching the locally referenced known-working Windows-compatible Android keyboard project. The prior outgoing best-effort QoS object was the main transport divergence.
+- Newly bonded hosts are auto-connected after 3 seconds rather than 250 ms, giving Windows time to finish pairing/SDP enumeration and HID driver installation. The previous early connect is a plausible cause of the pending L2CAP result.
+- The active `CompiledHid` is retained in the transport.
+- Implemented and logged:
+  - `onGetReport`: replies with a zeroed report of the compiled report size, or returns the appropriate HID error.
+  - `onSetReport`: logs and forwards output report payloads.
+  - `onSetProtocol` and `onVirtualCableUnplug`.
+- Build status: 39 JVM tests pass (`:core:hid:test`, `:core:control:test`), and `:app:assembleDebug` succeeds.
+- Current phone is kept awake with `adb shell svc power stayon usb` (verified `stay_on_while_plugged_in = 2`). Revert later with `adb shell svc power stayon false`.
+
+Next Windows test (change only this build; do not mix profiles):
+1. Remove MorphHID from Windows and unpair it from Android if present.
+2. Install the current debug APK, activate **Basic Keyboard** only.
+3. Make the phone discoverable when prompted/automatically.
+4. Clear logcat, then add the device from Windows.
+5. Wait at least 45 seconds after pairing before touching either UI.
+6. Save logcat and query Windows PnP for the phone address:
+   `Get-PnpDevice | Where-Object { $_.InstanceId -like "*ANDROID_BT_ADDRESS_HEX*" }`
+7. If Windows still does not connect, check whether `onGetReport` / `onSetProtocol` appear. Their absence confirms failure still happens before HID control traffic.
+
+If this still fails at the same L2CAP-pending point, the next isolated experiment is a temporary minimal profile using a byte-for-byte known-working descriptor from `build/reference-HidConfig.java` with no LEDs or pointer collection.
+
 ## Status (2026-08-31, session 5 - Windows discoverability fix
 
 Done:
@@ -254,7 +306,15 @@ AIDL (other Android apps):
 
 ## Build environment (this machine)
 - JDK 21 at `C:\Program Files\Android\Android Studio\jbr`.
-- Android SDK at `C:\Users\shime\AppData\Local\Android\Sdk`.
+- Android SDK at `%LOCALAPPDATA%\Android\Sdk`.
 - No system Gradle; wrapper distribution downloaded to
   `%TEMP%\morphhid-nettest\gradle.zip` during setup (see BUILDING.md for
   the offline bootstrap used here).
+
+## Windows compatibility A/B result (2026-09-01)
+- Cloned the known-working reference Android HID keyboard app to `build/reference-keyboardofbluetooth` and built/installed it as `com.example.myapplication` on the iQOO Pad2 Pro (Android 16).
+- After force-stopping MorphHID, the reference app successfully registered the Android classic HID Device profile (`init success!`, `register OK!成功在本机注册HID服务`).
+- The reference app then attempted to connect to the Windows host `WINDOWS_HOST` (`WINDOWS_BT_ADDRESS`) and failed exactly like MorphHID: the peer HID service disconnected twice.
+- This same-device A/B test rules out MorphHID's current descriptor, QoS, registration call, and callback implementation as the reason Windows will not complete the HID connection.
+- The Windows phone HID SDP node still has an empty `Service` and no `HidBth`/`HIDClass` child; Windows had rejected Android's L2CAP PSM 0x11 request with reason `0x0002` (PSM not supported), and no Android HID host callbacks were observed.
+- Next suspected areas: Windows Insider/build 26200 Bluetooth stack regression (possibly around KB5065436 or later 24H2/25H2 fixes), Intel Wireless Bluetooth driver, or cached Windows pairing/service state. A real BT keyboard test and update/driver/log inspection are next.

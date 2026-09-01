@@ -118,7 +118,28 @@ class HidDescriptorCompiler {
         // Reserved byte.
         b.global(ITEM_REPORT_COUNT, 1)
         b.global(ITEM_REPORT_SIZE, 8)
-        b.main(ITEM_INPUT, FLAGS_CONST)
+        b.main(ITEM_INPUT, FLAGS_CONST_ARRAY)
+
+        // LED output report: 5 bits + 3 bits padding.
+        var outputBytes = 0
+        if (c.includeLeds) {
+            b.global(ITEM_USAGE_PAGE, UsagePages.LED)
+            b.local(ITEM_USAGE_MIN, 1)
+            b.local(ITEM_USAGE_MAX, 5)
+            b.global(ITEM_LOGICAL_MIN, 0)
+            b.global(ITEM_LOGICAL_MAX, 1)
+            b.global(ITEM_REPORT_SIZE, 1)
+            b.global(ITEM_REPORT_COUNT, 5)
+            b.main(ITEM_OUTPUT, FLAGS_DATA_VAR_ABS)
+            b.global(ITEM_REPORT_COUNT, 3)
+            b.main(ITEM_OUTPUT, FLAGS_CONST_ARRAY)
+            outputBytes = 1
+            controls += ControlDescriptor("led.numLock", ControlKind.LED, reportId, UsagePages.LED, LedUsages.NUM_LOCK, bitOffset = 0, bitSize = 1, isOutput = true)
+            controls += ControlDescriptor("led.capsLock", ControlKind.LED, reportId, UsagePages.LED, LedUsages.CAPS_LOCK, bitOffset = 1, bitSize = 1, isOutput = true)
+            controls += ControlDescriptor("led.scrollLock", ControlKind.LED, reportId, UsagePages.LED, LedUsages.SCROLL_LOCK, bitOffset = 2, bitSize = 1, isOutput = true)
+            controls += ControlDescriptor("led.compose", ControlKind.LED, reportId, UsagePages.LED, LedUsages.COMPOSE, bitOffset = 3, bitSize = 1, isOutput = true)
+            controls += ControlDescriptor("led.kana", ControlKind.LED, reportId, UsagePages.LED, LedUsages.KANA, bitOffset = 4, bitSize = 1, isOutput = true)
+        }
 
         // Key array (boot-compatible: usages 0..101, N slots).
         b.global(ITEM_USAGE_PAGE, UsagePages.KEYBOARD)
@@ -131,25 +152,6 @@ class HidDescriptorCompiler {
         b.main(ITEM_INPUT, FLAGS_DATA_ARRAY)
 
         val inputBytes = 1 + 1 + rollover // modifiers/reserved + keys
-        var outputBytes = 0
-
-        // LED output report: 3 bits + 5 bits padding.
-        if (c.includeLeds) {
-            b.global(ITEM_USAGE_PAGE, UsagePages.LED)
-            b.local(ITEM_USAGE_MIN, 1)
-            b.local(ITEM_USAGE_MAX, 3)
-            b.global(ITEM_LOGICAL_MIN, 0)
-            b.global(ITEM_LOGICAL_MAX, 1)
-            b.global(ITEM_REPORT_SIZE, 1)
-            b.global(ITEM_REPORT_COUNT, 3)
-            b.main(ITEM_OUTPUT, FLAGS_DATA_VAR_ABS)
-            b.global(ITEM_REPORT_COUNT, 5)
-            b.main(ITEM_OUTPUT, FLAGS_CONST)
-            outputBytes = 1
-            controls += ControlDescriptor("led.numLock", ControlKind.LED, reportId, UsagePages.LED, 1, bitOffset = 0, bitSize = 1, isOutput = true)
-            controls += ControlDescriptor("led.capsLock", ControlKind.LED, reportId, UsagePages.LED, 2, bitOffset = 1, bitSize = 1, isOutput = true)
-            controls += ControlDescriptor("led.scrollLock", ControlKind.LED, reportId, UsagePages.LED, 3, bitOffset = 2, bitSize = 1, isOutput = true)
-        }
 
         b.main(ITEM_END_COLLECTION, 0)
 
@@ -454,6 +456,7 @@ class HidDescriptorCompiler {
         private const val FLAGS_DATA_VAR_ABS_NULL = 0x42
         private const val FLAGS_DATA_ARRAY = 0x00
         private const val FLAGS_CONST = 0x03
+        private const val FLAGS_CONST_ARRAY = 0x01
     }
 }
 
@@ -486,7 +489,7 @@ internal class DescriptorBuilder {
     }
 
     private fun sizeFor(value: Int): Int = when {
-        value in -128..127 -> 1
+        value in -128..255 -> 1
         value in 0..65535 -> 2
         else -> 4
     }

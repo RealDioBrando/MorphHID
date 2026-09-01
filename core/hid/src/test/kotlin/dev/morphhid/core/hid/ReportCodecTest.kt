@@ -132,7 +132,16 @@ class ReportCodecTest {
     @Test
     fun `led output report decodes to control states`() {
         val leds = codec.decodeOutput(1, byteArrayOf(0x03))
-        assertEquals(mapOf("led.numLock" to true, "led.capsLock" to true, "led.scrollLock" to false), leds)
+        assertEquals(
+            mapOf(
+                "led.numLock" to true,
+                "led.capsLock" to true,
+                "led.scrollLock" to false,
+                "led.compose" to false,
+                "led.kana" to false,
+            ),
+            leds,
+        )
     }
 
     @Test
