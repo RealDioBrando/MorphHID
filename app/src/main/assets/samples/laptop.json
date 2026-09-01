@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "device": {
+    "name": "Laptop Keyboard + Touchpad",
+    "description": "Laptop-style keyboard with an integrated touchpad and left/right click",
+    "hid": {
+      "subclass": "combo",
+      "collections": [
+        {
+          "type": "pointer",
+          "reportId": 1,
+          "buttons": 3,
+          "relativeAxes": [
+            "x",
+            "y",
+            "wheel"
+          ]
+        },
+        {
+          "type": "keyboard",
+          "reportId": 2
+        }
+      ]
+    }
+  },
+  "ui": {
+    "screens": [
+      {
+        "id": "keyboard",
+        "title": "Keyboard",
+        "layout": {
+          "type": "grid",
+          "columns": 4
+        },
+        "widgets": [
+          {
+            "type": "keyGrid",
+            "id": "qwerty",
+            "rows": [
+              {
+                "keys": [
+                  "q",
+                  "w",
+                  "e",
+                  "r",
+                  "t",
+                  "y",
+                  "u",
+                  "i",
+                  "o",
+                  "p"
+                ]
+              },
+              {
+                "keys": [
+                  "a",
+                  "s",
+                  "d",
+                  "f",
+                  "g",
+                  "h",
+                  "j",
+                  "k",
+                  "l"
+                ]
+              },
+              {
+                "keys": [
+                  "shift",
+                  "z",
+                  "x",
+                  "c",
+                  "v",
+                  "b",
+                  "n",
+                  "m",
+                  "backspace"
+                ]
+              },
+              {
+                "keys": [
+                  "ctrl",
+                  "alt",
+                  "space",
+                  "alt",
+                  "gui"
+                ]
+              },
+              {
+                "keys": [
+                  "left",
+                  "up",
+                  "down",
+                  "right",
+                  "enter"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "touchpad",
+        "title": "Touchpad",
+        "layout": {
+          "type": "grid",
+          "columns": 2
+        },
+        "widgets": [
+          {
+            "type": "button",
+            "id": "left",
+            "label": "Left Click",
+            "momentaryKey": "pointer.button1"
+          },
+          {
+            "type": "button",
+            "id": "right",
+            "label": "Right Click",
+            "momentaryKey": "pointer.button2"
+          },
+          {
+            "type": "pointerPad",
+            "id": "pad",
+            "sensitivity": 1.5,
+            "tapButton": 1
+          },
+          {
+            "type": "label",
+            "id": "hint",
+            "text": "Drag to move the cursor. Tap for left-click. Use the buttons above for explicit clicks."
+          }
+        ]
+      }
+    ]
+  }
+}
