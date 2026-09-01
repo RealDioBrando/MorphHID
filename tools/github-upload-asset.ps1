@@ -22,7 +22,7 @@ $assetName = "MorphHID-$Tag.apk"
 $uploadUrl = "https://uploads.github.com/repos/$repo/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetName))"
 Write-Host "Uploading $assetName to release id $($release.id) ..."
 
-$response = & C:\Windows\System32\curl.exe --progress-bar --max-time 1800 --connect-timeout 60 --speed-time 300 --speed-limit 1 --retry 5 --retry-delay 10 --retry-all-errors -L -X POST `
+$response = & C:\Windows\System32\curl.exe --progress-bar --http1.1 --max-time 1800 --connect-timeout 60 --speed-time 300 --speed-limit 1 --retry 5 --retry-delay 10 --retry-all-errors -L -X POST `
     -H "Authorization: Bearer $token" `
     -H "User-Agent: MorphHID-Release" `
     -H "Accept: application/vnd.github+json" `
@@ -36,4 +36,5 @@ if (-not $asset) { throw 'Upload returned no parseable JSON.' }
 Write-Host "Release URL: $($release.html_url)"
 Write-Host "Asset URL: $($asset.browser_download_url)"
 Write-Host "Asset size: $($asset.size)"
+
 
