@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import dev.morphhid.app.bluetooth.BluetoothHidTransport
+import dev.morphhid.app.bluetooth.UniversalHid
 import dev.morphhid.app.data.ProfileRepository
 import dev.morphhid.app.service.HidForegroundService
 import dev.morphhid.core.control.Actor
@@ -72,7 +73,7 @@ class AppController(private val context: Context) {
 
     fun activateProfile(stored: ProfileRepository.StoredProfile) {
         scope.launch {
-            val result = session.activate(stored.profile, stored.compiled)
+            val result = session.activate(stored.profile, UniversalHid.compiled)
             if (result is dev.morphhid.core.control.OpResult.Ok) {
                 _activeProfile.value = stored.profile
                 HidForegroundService.start(context)
