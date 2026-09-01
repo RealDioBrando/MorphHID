@@ -190,6 +190,19 @@ class ControlSession(
         }
     }
 
+    /** Vertical wheel scroll through a pointer.wheel relative axis. */
+    suspend fun scroll(actor: Actor, delta: Float): OpResult {
+        val check = policy.check(actor, ActionKind.ACTUATE_CONTROL, "pointer.wheel", meter = false)
+        if (check !is OpResult.Ok) return check
+        return mutex.withLock {
+            val c = codec ?: return@withLock OpResult.Error("no active profile")
+            if (!requireConnected()) return@withLock OpResult.Error("not connected")
+            c.addRelative("pointer.wheel", Math.round(delta).toInt())
+            flushLocked()
+            OpResult.Ok
+        }
+    }
+
     /** Continuous axis stream; exempt from the per-action rate meter. */
     suspend fun setAxisNormalized(actor: Actor, controlId: String, value: Float): OpResult {
         val check = policy.check(actor, ActionKind.ACTUATE_CONTROL, controlId, meter = false)

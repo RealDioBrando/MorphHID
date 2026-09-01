@@ -21,6 +21,8 @@ interface WidgetHost {
 
     /** Relative pointer motion in density-independent pixels. */
     fun onPointerDelta(dx: Float, dy: Float)
+    /** Vertical wheel scroll delta (positive = up). */
+    fun onWheel(delta: Float)
 
     /** Switch the runtime UI to a screen. */
     fun onPage(screenId: String)

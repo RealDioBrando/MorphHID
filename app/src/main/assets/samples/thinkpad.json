@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "device": {
+    "name": "ThinkPad TrackPoint",
+    "description": "75% keyboard with classic TrackPoint-style joystick",
+    "hid": {
+      "subclass": "combo",
+      "collections": [
+        {
+          "type": "keyboard",
+          "reportId": 1
+        },
+        {
+          "type": "pointer",
+          "reportId": 2,
+          "buttons": 3,
+          "relativeAxes": [
+            "x",
+            "y",
+            "wheel"
+          ]
+        }
+      ]
+    }
+  },
+  "ui": {
+    "screens": [
+      {
+        "id": "thinkpad",
+        "title": "ThinkPad",
+        "layout": {
+          "type": "grid",
+          "columns": 3
+        },
+        "widgets": [
+          {
+            "type": "keyGrid",
+            "id": "keys",
+            "rows": [
+              {
+                "keys": [
+                  "esc",
+                  "f1",
+                  "f2",
+                  "f3",
+                  "f4",
+                  "f5",
+                  "f6",
+                  "f7",
+                  "f8",
+                  "f9",
+                  "f10",
+                  "f11",
+                  "f12"
+                ]
+              },
+              {
+                "keys": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "0",
+                  "minus",
+                  "equal",
+                  "backspace"
+                ]
+              },
+              {
+                "keys": [
+                  "q",
+                  "w",
+                  "e",
+                  "r",
+                  "t",
+                  "y",
+                  "u",
+                  "i",
+                  "o",
+                  "p",
+                  "leftBracket",
+                  "rightBracket",
+                  "backslash"
+                ]
+              },
+              {
+                "keys": [
+                  "a",
+                  "s",
+                  "d",
+                  "f",
+                  "g",
+                  "h",
+                  "j",
+                  "k",
+                  "l",
+                  "semicolon",
+                  "quote",
+                  "enter"
+                ]
+              },
+              {
+                "keys": [
+                  "shift",
+                  "z",
+                  "x",
+                  "c",
+                  "v",
+                  "b",
+                  "n",
+                  "m",
+                  "comma",
+                  "period",
+                  "slash",
+                  "shift"
+                ]
+              },
+              {
+                "keys": [
+                  "ctrl",
+                  "alt",
+                  "space",
+                  "alt",
+                  "gui",
+                  "left",
+                  "up",
+                  "down",
+                  "right"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "label",
+            "id": "trackpoint-label",
+            "text": "TrackPoint"
+          },
+          {
+            "type": "button",
+            "id": "left",
+            "label": "Left",
+            "momentaryKey": "pointer.button1"
+          },
+          {
+            "type": "trackPoint",
+            "id": "point",
+            "sensitivity": 2.0,
+            "tapButton": 1
+          },
+          {
+            "type": "button",
+            "id": "right",
+            "label": "Right",
+            "momentaryKey": "pointer.button2"
+          },
+          {
+            "type": "label",
+            "id": "hint",
+            "text": "Push the knob to move. Tap it for left-click."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -142,6 +142,11 @@ class AppController(private val context: Context) {
             scope.launch { session.movePointer(Actor.Human(), dx, dy) }
         }
 
+        override fun onWheel(delta: Float) {
+            scope.launch { session.scroll(Actor.Human(), delta) }
+        }
+
+
         override fun onPage(screenId: String) {
             _requestedScreen.value = screenId
         }

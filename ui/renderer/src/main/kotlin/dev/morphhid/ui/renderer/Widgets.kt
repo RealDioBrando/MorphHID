@@ -122,6 +122,57 @@ fun ToggleWidget(widget: WidgetSpec.Toggle, host: WidgetHost, modifier: Modifier
 }
 
 @Composable
+fun TrackPointWidget(widget: WidgetSpec.TrackPoint, host: WidgetHost, modifier: Modifier = Modifier) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val shape = RoundedCornerShape(24.dp)
+    androidx.compose.foundation.Canvas(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .pointerInput(widget.id) {
+                val slop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dragDistance = 0f
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) break
+                        val delta = change.positionChange()
+                        if (delta != androidx.compose.ui.geometry.Offset.Zero) {
+                            dragDistance += delta.getDistance()
+                            host.onPointerDelta(delta.x * widget.sensitivity, delta.y * widget.sensitivity)
+                            change.consume()
+                        }
+                    }
+                    if (dragDistance < slop) {
+                        val button = widget.tapButton ?: return@awaitEachGesture
+                        val keyId = "pointer.button$button"
+                        host.onKey(keyId, true)
+                        scope.launch {
+                            delay(60)
+                            host.onKey(keyId, false)
+                        }
+                    }
+                }
+            },
+    ) {
+        val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+        drawCircle(
+            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f),
+            radius = size.minDimension * 0.28f,
+            center = center,
+        )
+        drawCircle(
+            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.20f),
+            radius = size.minDimension * 0.10f,
+            center = center,
+        )
+    }
+}
+
+@Composable
 fun LedWidget(widget: WidgetSpec.Led, ledStates: Map<String, Boolean>, modifier: Modifier = Modifier) {
     val on = ledStates["led." + widget.led] == true
     val shape = RoundedCornerShape(16.dp)
@@ -306,7 +357,7 @@ fun PointerPadWidget(widget: WidgetSpec.PointerPad, host: WidgetHost, modifier: 
     val shape = RoundedCornerShape(16.dp)
     androidx.compose.foundation.Canvas(
         modifier = modifier
-            .aspectRatio(1.2f)
+            .aspectRatio(if (widget.wide) 2.0f else 1.2f)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .pointerInput(widget.id) {
@@ -314,6 +365,7 @@ fun PointerPadWidget(widget: WidgetSpec.PointerPad, host: WidgetHost, modifier: 
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var dragDistance = 0f
+                    val scrollMode = widget.scrollStrip && down.position.x > size.width * 0.72f
                     try {
                         while (true) {
                             val event = awaitPointerEvent()
@@ -322,13 +374,16 @@ fun PointerPadWidget(widget: WidgetSpec.PointerPad, host: WidgetHost, modifier: 
                             val delta = change.positionChange()
                             if (delta != androidx.compose.ui.geometry.Offset.Zero) {
                                 dragDistance += delta.getDistance()
-                                host.onPointerDelta(delta.x * widget.sensitivity, delta.y * widget.sensitivity)
+                                if (scrollMode) {
+                                    host.onWheel(-delta.y * widget.sensitivity)
+                                } else {
+                                    host.onPointerDelta(delta.x * widget.sensitivity, delta.y * widget.sensitivity)
+                                }
                                 change.consume()
                             }
                         }
                     } finally {
-                        // Tap = press and release the configured button.
-                        if (dragDistance < slop) {
+                        if (!scrollMode && dragDistance < slop) {
                             val button = widget.tapButton ?: return@awaitEachGesture
                             val keyId = "pointer.button$button"
                             host.onKey(keyId, true)

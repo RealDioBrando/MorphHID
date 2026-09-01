@@ -108,6 +108,18 @@ sealed interface WidgetSpec {
         /** Tap on the pad = click this pointer button (1-based). Null disables tap-click. */
         val tapButton: Int? = 1,
         val scrollStrip: Boolean = false,
+        /** Span the full screen width and use a wider laptop-touchpad aspect ratio. */
+        val wide: Boolean = false,
+    ) : WidgetSpec
+
+    @Serializable
+    @SerialName("trackPoint")
+    data class TrackPoint(
+        override val id: String,
+        override val label: String = "",
+        val sensitivity: Float = 1.0f,
+        /** Tap on the knob = click this pointer button (1-based). Null disables tap-click. */
+        val tapButton: Int? = 1,
     ) : WidgetSpec
 
     @Serializable

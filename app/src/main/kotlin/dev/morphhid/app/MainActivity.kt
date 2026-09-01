@@ -45,9 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import dev.morphhid.app.bluetooth.BluetoothHidTransport
 import dev.morphhid.app.data.ProfileRepository
 import dev.morphhid.core.control.TransportPhase
@@ -83,6 +87,22 @@ private fun App(controller: AppController) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     val sessionState by controller.session.state.collectAsState()
     val activeProfile by controller.activeProfile.collectAsState()
+    val view = LocalView.current
+
+    // Full-screen runtime: hide system bars while a profile is active.
+    LaunchedEffect(screen) {
+        val activity = view.context as? android.app.Activity ?: return@LaunchedEffect
+        if (screen == Screen.Runtime) {
+            WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+            WindowCompat.getInsetsController(activity.window, view).apply {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            WindowCompat.setDecorFitsSystemWindows(activity.window, true)
+            WindowCompat.getInsetsController(activity.window, view).show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 
     // Runtime follows profile activation.
     LaunchedEffect(activeProfile) {

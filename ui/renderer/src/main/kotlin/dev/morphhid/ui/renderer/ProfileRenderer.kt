@@ -121,7 +121,7 @@ private fun ScreenContent(screen: ScreenSpec, host: WidgetHost, ledStates: Map<S
             itemsIndexed(
                 items = screen.widgets,
                 span = { _, item ->
-                    if (item is WidgetSpec.KeyGrid || item is WidgetSpec.Label) {
+                    if (item is WidgetSpec.KeyGrid || item is WidgetSpec.Label || (item is WidgetSpec.PointerPad && item.wide)) {
                         GridItemSpan(maxLineSpan)
                     } else {
                         GridItemSpan(1)
@@ -135,6 +135,7 @@ private fun ScreenContent(screen: ScreenSpec, host: WidgetHost, ledStates: Map<S
                     is WidgetSpec.Dpad -> DpadWidget(widget, host)
                     is WidgetSpec.Slider -> SliderWidget(widget, host)
                     is WidgetSpec.PointerPad -> PointerPadWidget(widget, host)
+                    is WidgetSpec.TrackPoint -> TrackPointWidget(widget, host)
                     is WidgetSpec.KeyGrid -> KeyGridWidget(widget, host)
                     is WidgetSpec.Led -> LedWidget(widget, ledStates)
                     is WidgetSpec.Label -> LabelWidget(widget)
