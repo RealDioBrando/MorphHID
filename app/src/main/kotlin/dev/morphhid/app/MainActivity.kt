@@ -146,21 +146,8 @@ private fun HomeScreen(
     var message by remember { mutableStateOf<String?>(null) }
     val sessionState by controller.session.state.collectAsState()
 
-    val discoverableLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { }
-    fun requestDiscoverable() {
-        if (controller.transport.setDiscoverable(300)) return
-        try {
-            discoverableLauncher.launch(
-                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-                },
-            )
-        } catch (e: Exception) {
-            message = "Cannot start discoverable: ${e.message}"
-        }
-    }
+
+
 
     // Runtime permissions (BLUETOOTH_CONNECT on S+, notifications on 33+).
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -267,11 +254,6 @@ private fun HomeScreen(
                             enabled = !stored.hasErrors,
                             onClick = {
                                 controller.activateProfile(stored)
-                                // Android 15/16 may remove the hidden setScanMode API.
-                                // Request the supported system discoverable flow while
-                                // this Activity is foregrounded so hosts can discover
-                                // the newly registered HID SDP record.
-                                requestDiscoverable()
                                 onOpenRuntime()
                             },
                         ) { Text("Activate") }

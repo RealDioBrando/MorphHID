@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "device": {
     "name": "Laptop Keyboard + Touchpad",
-    "description": "Laptop-style keyboard with an integrated touchpad and left/right click",
+    "description": "Single-screen laptop-style keyboard with integrated touchpad",
     "hid": {
       "subclass": "combo",
       "collections": [
@@ -26,17 +26,51 @@
   "ui": {
     "screens": [
       {
-        "id": "keyboard",
-        "title": "Keyboard",
+        "id": "laptop",
+        "title": "Laptop",
         "layout": {
           "type": "grid",
-          "columns": 4
+          "columns": 3
         },
         "widgets": [
           {
             "type": "keyGrid",
-            "id": "qwerty",
+            "id": "laptop-keyboard",
             "rows": [
+              {
+                "keys": [
+                  "esc",
+                  "f1",
+                  "f2",
+                  "f3",
+                  "f4",
+                  "f5",
+                  "f6",
+                  "f7",
+                  "f8",
+                  "f9",
+                  "f10",
+                  "f11",
+                  "f12"
+                ]
+              },
+              {
+                "keys": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "0",
+                  "minus",
+                  "equal",
+                  "backspace"
+                ]
+              },
               {
                 "keys": [
                   "q",
@@ -48,7 +82,10 @@
                   "u",
                   "i",
                   "o",
-                  "p"
+                  "p",
+                  "leftBracket",
+                  "rightBracket",
+                  "backslash"
                 ]
               },
               {
@@ -61,7 +98,10 @@
                   "h",
                   "j",
                   "k",
-                  "l"
+                  "l",
+                  "semicolon",
+                  "quote",
+                  "enter"
                 ]
               },
               {
@@ -74,7 +114,10 @@
                   "b",
                   "n",
                   "m",
-                  "backspace"
+                  "comma",
+                  "period",
+                  "slash",
+                  "shift"
                 ]
               },
               {
@@ -83,41 +126,25 @@
                   "alt",
                   "space",
                   "alt",
-                  "gui"
-                ]
-              },
-              {
-                "keys": [
+                  "gui",
                   "left",
                   "up",
                   "down",
-                  "right",
-                  "enter"
+                  "right"
                 ]
               }
             ]
-          }
-        ]
-      },
-      {
-        "id": "touchpad",
-        "title": "Touchpad",
-        "layout": {
-          "type": "grid",
-          "columns": 2
-        },
-        "widgets": [
+          },
           {
-            "type": "button",
-            "id": "left",
-            "label": "Left Click",
-            "momentaryKey": "pointer.button1"
+            "type": "label",
+            "id": "touchpad-label",
+            "text": "Touchpad"
           },
           {
             "type": "button",
-            "id": "right",
-            "label": "Right Click",
-            "momentaryKey": "pointer.button2"
+            "id": "left",
+            "label": "Left",
+            "momentaryKey": "pointer.button1"
           },
           {
             "type": "pointerPad",
@@ -126,9 +153,15 @@
             "tapButton": 1
           },
           {
+            "type": "button",
+            "id": "right",
+            "label": "Right",
+            "momentaryKey": "pointer.button2"
+          },
+          {
             "type": "label",
             "id": "hint",
-            "text": "Drag to move the cursor. Tap for left-click. Use the buttons above for explicit clicks."
+            "text": "Drag to move. Tap the pad for left-click."
           }
         ]
       }
