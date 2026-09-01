@@ -83,11 +83,21 @@ class ProfileRepository(private val context: Context) {
                 }
             }
             prefs.edit().putString("samples_fingerprint", fingerprint).apply()
+
+            // Remove bundled samples that were deleted from the APK so stale
+            // duplicate profiles do not linger in the on-device store.
+            for (legacy in legacySampleNames) {
+                File(dir, legacy).delete()
+            }
         } catch (e: Exception) {
             android.util.Log.w("ProfileRepository", "sample copy failed", e)
         }
     }
 
+    private val legacySampleNames = setOf(
+        "keyboard-mouse.json",
+        "laptop.json",
+    )
     private fun sampleFingerprint(names: Array<String>): String? {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(8192)

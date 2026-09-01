@@ -6,9 +6,9 @@ Import a JSON profile that declares which HID device(s) to emulate
 control UI looks like, and what macros/sequences the controls run. Both
 humans and agents drive the same audited control plane.
 
-> Status: **Phase 0/1 vertical slice.** Core engine (descriptor compiler,
+> Status: **Working vertical slice with signed releases.** Core engine (descriptor compiler,
 > report codec, macro engine, control session, UI renderer) is implemented
-> with JVM tests. On-device Bluetooth validation and agent adapters
+> with JVM tests. Universal HID registration, on-device Bluetooth validation, and agent adapters
 > (AppFunctions/AIDL/MCP) are next — see `docs/NOTES.md`.
 
 ## Building
@@ -25,10 +25,10 @@ Requirements: JDK 17+, Android SDK (compileSdk 35, minSdk 28).
 ## Using
 
 1. Import a profile (JSON) via **Import profile**, or start from the bundled
-   samples (Deck Mini, Basic Keyboard, Presenter) — they're copied into the
+   samples (Deck Mini, Basic Keyboard, Presenter, Laptop 75, ThinkPad TrackPoint) — they're copied into the
    app on first launch.
-2. **Activate** a profile: the app registers an HID device identity with
-   the Android Bluetooth stack.
+2. **Activate** a profile: the app registers one universal HID device once;
+   profiles then only swap the local UI and control mapping.
 3. Pair the phone with the host computer (Android Bluetooth settings), then
    use **Connect host** to pick the bonded host and connect.
 4. The runtime screen renders the profile's controls. Swipe between screens.
@@ -40,7 +40,7 @@ A profile declares:
 - `device.hid.collections` — the HID device identity (compiled into a real
   HID report descriptor): `keyboard`, `pointer`, `consumer`, `gamepad`.
 - `ui.screens[].widgets` — the control UI: `button`, `toggle`, `joystick`,
-  `dpad`, `slider`, `pointerPad`, `keyGrid`, `led`, `label`.
+  `dpad`, `slider`, `pointerPad`, `trackPoint`, `keyGrid`, `led`, `label`.
 - `macros` — sequences with timing and jitter (`type`, `hold`, `tap`,
   `delay`, `repeat`, `run`, `set`, `haptic`, `page`).
 - `agent` — what agents may do (scope, sensitive controls, rate limit).
@@ -71,8 +71,7 @@ Design docs: `docs/DESIGN.md` · Working notes & TODOs: `docs/NOTES.md`
 
 - Text typing uses the US keyboard layout only.
 - Game consoles (Xbox/PlayStation) don't accept generic HID controllers.
-- Hosts cache HID descriptors — switching to a profile with a different
-  fingerprint may require re-pairing on the host side.
+- Custom profiles are limited to controls present in the universal HID descriptor (keyboard, pointer, and a fixed consumer set).
 - Some OEM Bluetooth stacks don't implement the HID-device role correctly.
 
 ## License
