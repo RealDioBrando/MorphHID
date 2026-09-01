@@ -22,10 +22,17 @@ class HidDescriptorCompiler {
         }
 
         // --- assign report ids -------------------------------------------------
+        // Canonical order (keyboard, pointer, consumer, gamepad) keeps report
+        // ids stable across profiles. Hosts cache HID report descriptors per
+        // bonded device, so reusing the same id for the same collection type
+        // avoids a keyboard report being interpreted as a pointer after a
+        // profile switch.
         val usedIds = mutableSetOf<Int>()
         var next = 1
         val assigned = mutableListOf<Pair<HidCollectionSpec, Int>>()
-        for (c in hid.collections) {
+        val ordered = hid.collections.withIndex()
+            .sortedWith(compareBy({ collectionPriority(it.value) }, { it.index }))
+        for ((_, c) in ordered) {
             val id = c.reportId ?: next
             if (id < 1 || id > 255) {
                 throw IllegalArgumentException("reportId must be 1..255, got $id")
@@ -71,6 +78,13 @@ class HidDescriptorCompiler {
             reports = reports,
             controls = controls,
         )
+    }
+
+    private fun collectionPriority(c: HidCollectionSpec): Int = when (c) {
+        is HidCollectionSpec.Keyboard -> 0
+        is HidCollectionSpec.Pointer -> 1
+        is HidCollectionSpec.Consumer -> 2
+        is HidCollectionSpec.Gamepad -> 3
     }
 
     private fun subclassByteFor(hid: HidSpec): Byte = when (hid.subclass.lowercase()) {

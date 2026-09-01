@@ -7,44 +7,221 @@
     "hid": {
       "subclass": "combo",
       "collections": [
-        { "type": "keyboard", "reportId": 1 },
-        { "type": "consumer", "reportId": 2, "usages": ["playPause", "volumeUp", "volumeDown", "mute", "nextTrack", "prevTrack"] },
-        { "type": "pointer", "reportId": 3, "buttons": 3, "relativeAxes": ["x", "y", "wheel"] }
+        {
+          "type": "keyboard",
+          "reportId": 1
+        },
+        {
+          "type": "pointer",
+          "reportId": 2,
+          "buttons": 3,
+          "relativeAxes": [
+            "x",
+            "y",
+            "wheel"
+          ]
+        },
+        {
+          "type": "consumer",
+          "reportId": 3,
+          "usages": [
+            "playPause",
+            "volumeUp",
+            "volumeDown",
+            "mute",
+            "nextTrack",
+            "prevTrack"
+          ]
+        }
       ]
     }
   },
   "ui": {
-    "theme": { "dark": true, "primaryColor": "#7C4DFF", "accentColor": "#00E5FF" },
+    "theme": {
+      "dark": true,
+      "primaryColor": "#7C4DFF",
+      "accentColor": "#00E5FF"
+    },
     "screens": [
       {
         "id": "deck",
         "title": "Macro Deck",
-        "layout": { "type": "grid", "columns": 3 },
+        "layout": {
+          "type": "grid",
+          "columns": 3
+        },
         "widgets": [
-          { "type": "button", "id": "copy", "label": "Copy", "onTap": { "type": "combo", "keys": ["keyboard.leftCtrl", "keyboard.c"] } },
-          { "type": "button", "id": "paste", "label": "Paste", "onTap": { "type": "combo", "keys": ["keyboard.leftCtrl", "keyboard.v"] } },
-          { "type": "button", "id": "apple", "label": "type apple", "onTap": { "type": "macro", "macro": "typeApple" } },
-          { "type": "button", "id": "undo", "label": "Undo", "onTap": { "type": "combo", "keys": ["keyboard.leftCtrl", "keyboard.z"] } },
-          { "type": "button", "id": "save", "label": "Save", "onTap": { "type": "combo", "keys": ["keyboard.leftCtrl", "keyboard.s"] } },
-          { "type": "button", "id": "greet", "label": "Greet", "onTap": { "type": "text", "text": "hello from MorphHID!\n", "keyDelayMs": 35, "jitterMs": 15 } },
-          { "type": "led", "id": "caps", "led": "capsLock", "label": "CAPS" },
-          { "type": "toggle", "id": "scroll", "label": "Keep-awake", "onTurnOn": { "type": "macro", "macro": "wakeOn" }, "onTurnOff": { "type": "macro", "macro": "wakeOff" } },
-          { "type": "button", "id": "page2", "label": "Media →", "onTap": { "type": "page", "screen": "media" } }
+          {
+            "type": "button",
+            "id": "copy",
+            "label": "Copy",
+            "onTap": {
+              "type": "combo",
+              "keys": [
+                "keyboard.leftCtrl",
+                "keyboard.c"
+              ]
+            }
+          },
+          {
+            "type": "button",
+            "id": "paste",
+            "label": "Paste",
+            "onTap": {
+              "type": "combo",
+              "keys": [
+                "keyboard.leftCtrl",
+                "keyboard.v"
+              ]
+            }
+          },
+          {
+            "type": "button",
+            "id": "apple",
+            "label": "type apple",
+            "onTap": {
+              "type": "macro",
+              "macro": "typeApple"
+            }
+          },
+          {
+            "type": "button",
+            "id": "undo",
+            "label": "Undo",
+            "onTap": {
+              "type": "combo",
+              "keys": [
+                "keyboard.leftCtrl",
+                "keyboard.z"
+              ]
+            }
+          },
+          {
+            "type": "button",
+            "id": "save",
+            "label": "Save",
+            "onTap": {
+              "type": "combo",
+              "keys": [
+                "keyboard.leftCtrl",
+                "keyboard.s"
+              ]
+            }
+          },
+          {
+            "type": "button",
+            "id": "greet",
+            "label": "Greet",
+            "onTap": {
+              "type": "text",
+              "text": "hello from MorphHID!\n",
+              "keyDelayMs": 35,
+              "jitterMs": 15
+            }
+          },
+          {
+            "type": "led",
+            "id": "caps",
+            "led": "capsLock",
+            "label": "CAPS"
+          },
+          {
+            "type": "toggle",
+            "id": "scroll",
+            "label": "Keep-awake",
+            "onTurnOn": {
+              "type": "macro",
+              "macro": "wakeOn"
+            },
+            "onTurnOff": {
+              "type": "macro",
+              "macro": "wakeOff"
+            }
+          },
+          {
+            "type": "button",
+            "id": "page2",
+            "label": "Media →",
+            "onTap": {
+              "type": "page",
+              "screen": "media"
+            }
+          }
         ]
       },
       {
         "id": "media",
         "title": "Media",
-        "layout": { "type": "grid", "columns": 3 },
+        "layout": {
+          "type": "grid",
+          "columns": 3
+        },
         "widgets": [
-          { "type": "button", "id": "prev", "label": "⏮", "onTap": { "type": "key", "key": "consumer.prevTrack" } },
-          { "type": "button", "id": "play", "label": "⏯", "onTap": { "type": "key", "key": "consumer.playPause" } },
-          { "type": "button", "id": "next", "label": "⏭", "onTap": { "type": "key", "key": "consumer.nextTrack" } },
-          { "type": "button", "id": "voldn", "label": "Vol −", "onTap": { "type": "key", "key": "consumer.volumeDown" } },
-          { "type": "button", "id": "mute", "label": "Mute", "onTap": { "type": "key", "key": "consumer.mute" } },
-          { "type": "button", "id": "volup", "label": "Vol +", "onTap": { "type": "key", "key": "consumer.volumeUp" } },
-          { "type": "label", "id": "padlabel", "text": "Touch pad (tap = left click)" },
-          { "type": "pointerPad", "id": "pad", "sensitivity": 1.4, "tapButton": 1 }
+          {
+            "type": "button",
+            "id": "prev",
+            "label": "⏮",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.prevTrack"
+            }
+          },
+          {
+            "type": "button",
+            "id": "play",
+            "label": "⏯",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.playPause"
+            }
+          },
+          {
+            "type": "button",
+            "id": "next",
+            "label": "⏭",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.nextTrack"
+            }
+          },
+          {
+            "type": "button",
+            "id": "voldn",
+            "label": "Vol −",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.volumeDown"
+            }
+          },
+          {
+            "type": "button",
+            "id": "mute",
+            "label": "Mute",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.mute"
+            }
+          },
+          {
+            "type": "button",
+            "id": "volup",
+            "label": "Vol +",
+            "onTap": {
+              "type": "key",
+              "key": "consumer.volumeUp"
+            }
+          },
+          {
+            "type": "label",
+            "id": "padlabel",
+            "text": "Touch pad (tap = left click)"
+          },
+          {
+            "type": "pointerPad",
+            "id": "pad",
+            "sensitivity": 1.4,
+            "tapButton": 1
+          }
         ]
       }
     ]
@@ -54,28 +231,78 @@
       "description": "Types 'apple' with human-ish pacing",
       "policy": "RESTART",
       "steps": [
-        { "type": "type", "text": "apple", "keyDelayMs": 45, "jitterMs": 20 }
+        {
+          "type": "type",
+          "text": "apple",
+          "keyDelayMs": 45,
+          "jitterMs": 20
+        }
       ]
     },
     "greet": {
       "description": "Opens Run dialog and types a greeting",
       "policy": "RESTART",
       "steps": [
-        { "type": "hold", "keys": ["keyboard.winKey", "keyboard.r"], "durationMs": 90 },
-        { "type": "delay", "ms": 250 },
-        { "type": "type", "text": "notepad", "keyDelayMs": 40 },
-        { "type": "tap", "key": "keyboard.enter" },
-        { "type": "delay", "ms": 600 },
-        { "type": "type", "text": "hello from MorphHID!", "keyDelayMs": 45, "jitterMs": 25 },
-        { "type": "tap", "key": "keyboard.enter" }
+        {
+          "type": "hold",
+          "keys": [
+            "keyboard.winKey",
+            "keyboard.r"
+          ],
+          "durationMs": 90
+        },
+        {
+          "type": "delay",
+          "ms": 250
+        },
+        {
+          "type": "type",
+          "text": "notepad",
+          "keyDelayMs": 40
+        },
+        {
+          "type": "tap",
+          "key": "keyboard.enter"
+        },
+        {
+          "type": "delay",
+          "ms": 600
+        },
+        {
+          "type": "type",
+          "text": "hello from MorphHID!",
+          "keyDelayMs": 45,
+          "jitterMs": 25
+        },
+        {
+          "type": "tap",
+          "key": "keyboard.enter"
+        }
       ]
     },
-    "wakeOn": { "steps": [ { "type": "haptic", "ms": 30 } ] },
-    "wakeOff": { "steps": [ { "type": "haptic", "ms": 10 } ] }
+    "wakeOn": {
+      "steps": [
+        {
+          "type": "haptic",
+          "ms": 30
+        }
+      ]
+    },
+    "wakeOff": {
+      "steps": [
+        {
+          "type": "haptic",
+          "ms": 10
+        }
+      ]
+    }
   },
   "agent": {
     "defaultScope": "INVOKE_ONLY",
-    "sensitiveControls": ["keyboard.winKey", "keyboard.leftCtrl"],
+    "sensitiveControls": [
+      "keyboard.winKey",
+      "keyboard.leftCtrl"
+    ],
     "rateLimitPerMinute": 120
   }
 }
